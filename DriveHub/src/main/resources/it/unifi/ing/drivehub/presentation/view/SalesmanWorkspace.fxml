@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="it.unifi.ing.drivehub.presentation.controller.SalesmanWorkspaceController"
+            stylesheets="@../css/style.css" prefWidth="1280" prefHeight="800">
+    <top>
+        <HBox styleClass="app-header">
+            <Label text="⌁" styleClass="brand-mark"/><Label text="DriveHub" styleClass="brand-name"/>
+            <Region HBox.hgrow="ALWAYS"/><Label fx:id="userLabel" text="Salesman"/>
+            <Button text="Aggiorna" onAction="#refresh" styleClass="secondary-button"/>
+            <Button text="Logout" onAction="#logout" styleClass="secondary-button"/>
+        </HBox>
+    </top>
+    <center>
+        <VBox styleClass="content">
+            <Label text="Area venditore" styleClass="page-title"/>
+            <TabPane VBox.vgrow="ALWAYS" tabClosingPolicy="UNAVAILABLE">
+                <tabs>
+                    <Tab text="Prenotazioni test drive">
+                        <VBox styleClass="content">
+                            <TableView fx:id="testDriveTable" VBox.vgrow="ALWAYS">
+                                <columns>
+                                    <TableColumn fx:id="tdCodeColumn" text="Codice" prefWidth="120"/>
+                                    <TableColumn fx:id="tdCustomerColumn" text="Cliente" prefWidth="210"/>
+                                    <TableColumn fx:id="tdVehicleColumn" text="Veicolo" prefWidth="240"/>
+                                    <TableColumn fx:id="tdDateColumn" text="Data" prefWidth="180"/>
+                                    <TableColumn fx:id="tdStatusColumn" text="Stato" prefWidth="130"/>
+                                </columns>
+                            </TableView>
+                            <HBox styleClass="toolbar">
+                                <Button text="Conferma / prendi in carico" onAction="#confirmTestDrive" styleClass="secondary-button"/>
+                                <Button text="Avvia" onAction="#startTestDrive" styleClass="secondary-button"/>
+                                <Button text="Completa" onAction="#completeTestDrive" styleClass="primary-button"/>
+                                <Button text="Annulla" onAction="#cancelTestDrive" styleClass="danger-button"/>
+                            </HBox>
+                        </VBox>
+                    </Tab>
+                    <Tab text="Prenotazioni noleggio">
+                        <VBox styleClass="content">
+                            <TableView fx:id="rentalTable" VBox.vgrow="ALWAYS">
+                                <columns>
+                                    <TableColumn fx:id="rentalCodeColumn" text="Codice" prefWidth="120"/>
+                                    <TableColumn fx:id="rentalCustomerColumn" text="Cliente" prefWidth="200"/>
+                                    <TableColumn fx:id="rentalVehicleColumn" text="Veicolo" prefWidth="220"/>
+                                    <TableColumn fx:id="rentalPeriodColumn" text="Periodo" prefWidth="220"/>
+                                    <TableColumn fx:id="rentalStatusColumn" text="Stato" prefWidth="130"/>
+                                </columns>
+                            </TableView>
+                            <HBox styleClass="toolbar">
+                                <Button text="Prendi in carico" onAction="#claimRental" styleClass="primary-button"/>
+                                <Button text="Conferma" onAction="#confirmRental" styleClass="secondary-button"/>
+                                <Button text="Avvia" onAction="#startRental" styleClass="secondary-button"/>
+                                <Button text="Completa" onAction="#completeRental" styleClass="secondary-button"/>
+                                <Button text="Annulla" onAction="#cancelRental" styleClass="danger-button"/>
+                            </HBox>
+                        </VBox>
+                    </Tab>
+                    <Tab text="Proposte di acquisto">
+                        <VBox styleClass="content">
+                            <TableView fx:id="proposalTable" VBox.vgrow="ALWAYS">
+                                <columns>
+                                    <TableColumn fx:id="proposalCodeColumn" text="Codice" prefWidth="120"/>
+                                    <TableColumn fx:id="proposalCustomerColumn" text="Cliente" prefWidth="190"/>
+                                    <TableColumn fx:id="proposalVehicleColumn" text="Veicolo proposto" prefWidth="260"/>
+                                    <TableColumn fx:id="proposalAskedColumn" text="Richiesta" prefWidth="120"/>
+                                    <TableColumn fx:id="proposalStatusColumn" text="Stato" prefWidth="130"/>
+                                </columns>
+                            </TableView>
+                            <HBox styleClass="toolbar">
+                                <TextField fx:id="offerAmountField" promptText="Importo offerto"/>
+                                <Button text="Crea e invia proposta" onAction="#submitProposal" styleClass="primary-button"/>
+                            </HBox>
+                        </VBox>
+                    </Tab>
+                    <Tab text="Inventario">
+                        <VBox styleClass="content">
+                            <TableView fx:id="inventoryTable" VBox.vgrow="ALWAYS">
+                                <columns>
+                                    <TableColumn fx:id="inventoryPlateColumn" text="Targa" prefWidth="130"/>
+                                    <TableColumn fx:id="inventoryModelColumn" text="Modello" prefWidth="250"/>
+                                    <TableColumn fx:id="inventoryTypeColumn" text="Tipo" prefWidth="130"/>
+                                    <TableColumn fx:id="inventoryStatusColumn" text="Stato" prefWidth="150"/>
+                                </columns>
+                            </TableView>
+                            <HBox styleClass="toolbar">
+                                <ComboBox fx:id="inventoryStatusCombo" promptText="Nuovo stato" prefWidth="180"/>
+                                <Button text="Aggiorna stato" onAction="#updateVehicleStatus" styleClass="primary-button"/>
+                            </HBox>
+                        </VBox>
+                    </Tab>
+                </tabs>
+            </TabPane>
+            <Label fx:id="messageLabel" wrapText="true"/>
+        </VBox>
+    </center>
+</BorderPane>

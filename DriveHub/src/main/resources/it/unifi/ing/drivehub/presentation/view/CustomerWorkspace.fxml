@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="it.unifi.ing.drivehub.presentation.controller.CustomerWorkspaceController"
+            stylesheets="@../css/style.css" prefWidth="1280" prefHeight="800">
+    <top>
+        <HBox styleClass="app-header">
+            <Label text="⌁" styleClass="brand-mark"/>
+            <Label text="DriveHub" styleClass="brand-name"/>
+            <Region HBox.hgrow="ALWAYS"/>
+            <Label fx:id="userLabel" text="Customer"/>
+            <Button text="Aggiorna" onAction="#refresh" styleClass="secondary-button"/>
+            <Button text="Logout" onAction="#logout" styleClass="secondary-button"/>
+        </HBox>
+    </top>
+    <center>
+        <VBox styleClass="content">
+            <Label text="Area cliente" styleClass="page-title"/>
+            <TabPane fx:id="workspaceTabs" VBox.vgrow="ALWAYS" tabClosingPolicy="UNAVAILABLE">
+                <tabs>
+                    <Tab text="Catalogo veicoli">
+                        <VBox styleClass="content">
+                            <HBox styleClass="toolbar">
+                                <TextField fx:id="catalogSearchField" promptText="Marca o modello" prefWidth="260"/>
+                                <ComboBox fx:id="vehicleTypeCombo" promptText="Vendita o noleggio" prefWidth="190"/>
+                                <TextField fx:id="maxPriceField" promptText="Prezzo massimo" prefWidth="150"/>
+                                <Button text="Cerca" onAction="#searchCatalog" styleClass="primary-button"/>
+                            </HBox>
+                            <TableView fx:id="catalogTable" VBox.vgrow="ALWAYS">
+                                <columns>
+                                    <TableColumn fx:id="catalogPlateColumn" text="Targa" prefWidth="120"/>
+                                    <TableColumn fx:id="catalogModelColumn" text="Veicolo" prefWidth="240"/>
+                                    <TableColumn fx:id="catalogTypeColumn" text="Tipo" prefWidth="120"/>
+                                    <TableColumn fx:id="catalogMileageColumn" text="Km" prefWidth="100"/>
+                                    <TableColumn fx:id="catalogPriceColumn" text="Prezzo" prefWidth="150"/>
+                                    <TableColumn fx:id="catalogStatusColumn" text="Stato" prefWidth="130"/>
+                                </columns>
+                            </TableView>
+                            <HBox styleClass="toolbar">
+                                <Button text="Prenota test drive" onAction="#selectForTestDrive" styleClass="secondary-button"/>
+                                <Button text="Noleggia" onAction="#selectForRental" styleClass="primary-button"/>
+                                <Button text="Prenota / acquista" onAction="#selectForPurchase" styleClass="primary-button"/>
+                            </HBox>
+                        </VBox>
+                    </Tab>
+                    <Tab text="Test drive">
+                        <VBox styleClass="content">
+                            <Label text="Prenota un test drive" styleClass="section-title"/>
+                            <HBox styleClass="toolbar">
+                                <Label fx:id="testDriveVehicleLabel" text="Seleziona un veicolo dal catalogo" styleClass="muted"/>
+                                <DatePicker fx:id="testDriveDatePicker"/>
+                                <TextField fx:id="testDriveTimeField" promptText="HH:mm" prefWidth="90"/>
+                                <Button text="Prenota" onAction="#bookTestDrive" styleClass="primary-button"/>
+                            </HBox>
+                            <TableView fx:id="testDriveTable" VBox.vgrow="ALWAYS">
+                                <columns>
+                                    <TableColumn fx:id="testDriveCodeColumn" text="Codice" prefWidth="130"/>
+                                    <TableColumn fx:id="testDriveVehicleColumn" text="Veicolo" prefWidth="260"/>
+                                    <TableColumn fx:id="testDriveDateColumn" text="Data e ora" prefWidth="190"/>
+                                    <TableColumn fx:id="testDriveStatusColumn" text="Stato" prefWidth="140"/>
+                                </columns>
+                            </TableView>
+                        </VBox>
+                    </Tab>
+                    <Tab text="Noleggia">
+                        <VBox styleClass="content">
+                            <Label text="Crea prenotazione di noleggio" styleClass="section-title"/>
+                            <Label fx:id="rentalVehicleLabel" text="Seleziona un veicolo a noleggio dal catalogo" styleClass="muted"/>
+                            <HBox styleClass="toolbar">
+                                <Label text="Dal"/><DatePicker fx:id="rentalStartPicker"/>
+                                <Label text="al"/><DatePicker fx:id="rentalEndPicker"/>
+                                <Button text="Calcola preventivo" onAction="#quoteRental" styleClass="secondary-button"/>
+                                <Label fx:id="rentalQuoteLabel" text="—" styleClass="section-title"/>
+                                <Button text="Conferma e paga" onAction="#rentAndPay" styleClass="primary-button"/>
+                            </HBox>
+                            <Label fx:id="rentalMessageLabel" wrapText="true"/>
+                        </VBox>
+                    </Tab>
+                    <Tab text="Le mie prenotazioni">
+                        <VBox styleClass="content">
+                            <TableView fx:id="rentalTable" VBox.vgrow="ALWAYS">
+                                <columns>
+                                    <TableColumn fx:id="rentalCodeColumn" text="Codice" prefWidth="130"/>
+                                    <TableColumn fx:id="rentalBookedVehicleColumn" text="Veicolo" prefWidth="250"/>
+                                    <TableColumn fx:id="rentalDatesColumn" text="Periodo" prefWidth="230"/>
+                                    <TableColumn fx:id="rentalAmountColumn" text="Totale" prefWidth="120"/>
+                                    <TableColumn fx:id="rentalStatusColumn" text="Stato" prefWidth="140"/>
+                                </columns>
+                            </TableView>
+                            <Button text="Annulla selezionata" onAction="#cancelRental" styleClass="danger-button"/>
+                        </VBox>
+                    </Tab>
+                    <Tab text="Vendi un veicolo">
+                        <VBox styleClass="content">
+                            <Label text="Proponi al concessionario un tuo veicolo" styleClass="section-title"/>
+                            <GridPane styleClass="form-grid">
+                                <Label text="Targa" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                                <TextField fx:id="salePlateField" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+                                <Label text="Marchio" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                                <TextField fx:id="saleBrandField" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+                                <Label text="Modello" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                                <TextField fx:id="saleModelField" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+                                <Label text="Anno" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                                <TextField fx:id="saleYearField" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+                                <Label text="Chilometraggio" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+                                <TextField fx:id="saleMileageField" GridPane.rowIndex="4" GridPane.columnIndex="1"/>
+                                <Label text="Valutazione richiesta" GridPane.rowIndex="5" GridPane.columnIndex="0"/>
+                                <TextField fx:id="saleRequestedPriceField" GridPane.rowIndex="5" GridPane.columnIndex="1"/>
+                            </GridPane>
+                            <Button text="Invia richiesta" onAction="#submitVehicleSale" styleClass="primary-button"/>
+                            <Label fx:id="saleMessageLabel" wrapText="true"/>
+                        </VBox>
+                    </Tab>
+                </tabs>
+            </TabPane>
+            <Label fx:id="globalMessageLabel" wrapText="true"/>
+        </VBox>
+    </center>
+</BorderPane>

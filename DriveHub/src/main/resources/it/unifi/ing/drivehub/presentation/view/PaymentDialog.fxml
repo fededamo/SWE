@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns="http://javafx.com/javafx/21"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="it.unifi.ing.drivehub.presentation.controller.PaymentDialogController"
+      stylesheets="@../css/style.css" styleClass="card" spacing="14" prefWidth="430">
+    <Label text="Pagamento dimostrativo" styleClass="page-title"/>
+    <Label text="Nessun circuito esterno viene contattato." styleClass="muted"/>
+    <Label text="Importo"/><Label fx:id="amountLabel" text="€ 0,00" styleClass="metric-value"/>
+    <Label text="Riferimento"/><Label fx:id="referenceLabel" text="—"/>
+    <ComboBox fx:id="methodCombo" promptText="Metodo simulato" maxWidth="Infinity"/>
+    <Label fx:id="messageLabel" wrapText="true"/>
+    <HBox spacing="10">
+        <Button text="Annulla" onAction="#cancel" styleClass="secondary-button"/>
+        <Button text="Conferma pagamento" onAction="#confirm" styleClass="primary-button"/>
+    </HBox>
+</VBox>

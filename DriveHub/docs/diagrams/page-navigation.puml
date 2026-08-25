@@ -1,0 +1,62 @@
+@startuml
+!pragma layout smetana
+title DriveHub — Navigazione delle pagine
+skinparam shadowing false
+hide empty description
+
+[*] --> Welcome
+Welcome --> Login : Accedi
+Welcome --> Register : Registrati
+Login --> Register : Crea account
+Register --> Login : Ho già un account
+
+Login --> RoleRouter : credenziali valide
+Login --> Login : errore
+Register --> RoleRouter : registrazione valida\n+sessione aperta
+Register --> Register : validazione/errore
+
+state RoleRouter <<choice>>
+RoleRouter --> CustomerWorkspace : CUSTOMER
+RoleRouter --> SalesmanWorkspace : SALESMAN
+RoleRouter --> ManagerWorkspace : MANAGER
+RoleRouter --> Welcome : ruolo non valido\n+sessione chiusa
+
+state CustomerWorkspace {
+  [*] --> Catalogo
+  Catalogo --> TestDrive : prenota
+  Catalogo --> Noleggia : veicolo RENTAL
+  Catalogo --> Payment : riserva/acquista
+  Noleggia --> Payment : conferma preventivo
+  Payment --> Prenotazioni : pagamento noleggio riuscito
+  Payment --> Catalogo : pagamento vendita riuscito
+  Payment --> Noleggia : fallito/annullato noleggio
+  Payment --> Catalogo : fallito/annullato vendita
+  Catalogo --> VendiVeicolo
+  Prenotazioni --> Prenotazioni : aggiorna/annulla
+}
+
+state SalesmanWorkspace {
+  [*] --> GestioneTestDrive
+  GestioneTestDrive --> GestioneTestDrive : conferma/avvia/completa
+  GestioneNoleggi --> GestioneNoleggi : assegna/conferma/avvia/completa
+  Proposte --> Proposte : formula offerta
+  Inventario --> Inventario : aggiorna stato
+}
+
+state ManagerWorkspace {
+  [*] --> Dashboard
+  Dashboard --> Dashboard : aggiorna
+  NuoviVeicoli --> NuoviVeicoli : crea/aggiorna ordine
+  PrezziPromozioni --> PrezziPromozioni : prezzo/sconto
+  Approvazioni --> Approvazioni : approva/rifiuta
+}
+
+CustomerWorkspace --> Welcome : Logout
+SalesmanWorkspace --> Welcome : Logout
+ManagerWorkspace --> Welcome : Logout
+
+note right of Register
+  Login UI.png raffigura in realtà
+  la registrazione (“CREATE ACCOUNT”).
+end note
+@enduml

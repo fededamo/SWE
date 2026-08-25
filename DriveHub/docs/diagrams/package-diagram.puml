@@ -1,0 +1,71 @@
+@startuml
+!pragma layout smetana
+title DriveHub — Package e dipendenze
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+package "it.unifi.ing.drivehub" as root {
+  class DriveHubApplication
+
+  package presentation {
+    package controller
+    package navigation
+    package core as presentation_core
+    package "view (FXML/CSS)" as view
+  }
+
+  package business {
+    package services
+    package "core" as business_core
+    package strategies
+    package security
+    package exceptions
+  }
+
+  package domain {
+    package users
+    package vehicles
+    package rentals
+    package sales
+    package observer
+  }
+
+  package dao {
+    package interfaces
+    package postgres
+  }
+}
+
+database PostgreSQL
+cloud "PaymentGateway simulato" as payment_gateway
+
+view --> controller : fx:controller
+controller --> presentation_core : UiGateway, context, models
+controller --> navigation : cambio route/logout
+navigation --> presentation_core : sessione e context
+presentation_core --> services : ServiceUiGateway
+presentation_core --> domain : DTO mapping e Role
+
+services --> business_core : TransactionRunner/PaymentGateway
+services --> strategies : PricingStrategy
+services --> security : PasswordHasher
+services --> exceptions
+services --> domain
+business_core --> interfaces : DaoFactory/UnitOfWork
+strategies --> domain
+security --> domain
+
+postgres ..> interfaces : implementa le porte
+postgres --> domain : mapping
+postgres --> PostgreSQL : JDBC
+vehicles --> observer : InventorySubject/eventi
+
+DriveHubApplication --> presentation_core : composition root
+DriveHubApplication --> navigation
+DriveHubApplication --> services
+DriveHubApplication --> strategies
+DriveHubApplication --> security
+DriveHubApplication --> postgres
+DriveHubApplication --> payment_gateway
+payment_gateway ..> business_core : implementa PaymentGateway
+@enduml

@@ -1,0 +1,37 @@
+@startuml
+title UC-TD-01/02 — Test drive
+autonumber
+actor Customer
+actor Salesman
+boundary CustomerUI
+boundary SalesmanUI
+control TestDriveService
+database TestDriveDao
+
+Customer -> CustomerUI : veicolo + slot futuro
+CustomerUI -> TestDriveService : request(customer, vehicle, slot)
+TestDriveService -> TestDriveDao : checkSlot(customer, vehicle, slot)
+alt slot libero
+  TestDriveService -> TestDriveDao : save(REQUESTED)
+  TestDriveService --> CustomerUI : richiesta creata
+else conflitto
+  TestDriveService --> CustomerUI : slot non disponibile
+end
+
+Salesman -> SalesmanUI : seleziona richiesta
+SalesmanUI -> TestDriveService : confirm(id, salesman)
+TestDriveService -> TestDriveDao : confirmIfRequestedAndUnassigned(...)
+alt conferma atomica riuscita
+  TestDriveDao --> TestDriveService : CONFIRMED
+  TestDriveService --> SalesmanUI : aggiornato
+  Salesman -> SalesmanUI : Avvia
+  SalesmanUI -> TestDriveService : start(id, salesman)
+  TestDriveService -> TestDriveDao : update(IN_PROGRESS)
+  Salesman -> SalesmanUI : Completa
+  SalesmanUI -> TestDriveService : complete(id, salesman)
+  TestDriveService -> TestDriveDao : update(COMPLETED)
+else già preso/stato cambiato
+  TestDriveDao --> TestDriveService : 0 righe
+  TestDriveService --> SalesmanUI : conflitto + refresh
+end
+@enduml

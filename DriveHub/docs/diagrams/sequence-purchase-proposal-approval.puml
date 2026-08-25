@@ -1,0 +1,43 @@
+@startuml
+title UC-ACQ-01/02/03 — Proposta e approvazione
+autonumber
+actor Customer
+actor Salesman
+actor Manager
+boundary CustomerUI
+boundary SalesmanUI
+boundary ManagerUI
+control SalesService
+participant UnitOfWork
+database VehicleDao
+database PurchaseProposalDao
+
+Customer -> CustomerUI : invia dati veicolo + importo richiesto
+CustomerUI -> SalesService : requestAcquisition(customer, vehicleData, amount)
+SalesService -> UnitOfWork : begin
+SalesService -> VehicleDao : save(ACQUISITION_REQUEST)
+SalesService -> PurchaseProposalDao : save(REQUESTED)
+SalesService -> UnitOfWork : commit
+SalesService --> CustomerUI : pratica creata
+
+Salesman -> SalesmanUI : seleziona pratica REQUESTED
+SalesmanUI -> SalesService : offer(proposalId, salesman, amount)
+SalesService -> PurchaseProposalDao : updateIfStatus(REQUESTED, OFFERED)
+SalesService --> SalesmanUI : offerta in coda Manager
+
+Manager -> ManagerUI : seleziona proposta OFFERED
+alt approva
+  ManagerUI -> SalesService : approve(id, manager, reason)
+  SalesService -> UnitOfWork : begin
+  SalesService -> PurchaseProposalDao : decideIfOffered(APPROVED, manager, now)
+  SalesService -> UnitOfWork : commit
+  SalesService --> ManagerUI : APPROVED
+else rifiuta
+  ManagerUI -> SalesService : reject(id, manager, reason)
+  SalesService -> PurchaseProposalDao : decideIfOffered(REJECTED, manager, now)
+  SalesService --> ManagerUI : REJECTED
+else stato cambiato
+  PurchaseProposalDao --> SalesService : 0 righe
+  SalesService --> ManagerUI : conflitto + refresh
+end
+@enduml

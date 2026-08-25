@@ -1,0 +1,287 @@
+@startuml
+!pragma layout smetana
+title DriveHub — Classi del dominio
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+
+abstract class BaseEntity {
+  - id: Long
+  + id(): Long
+  + assignId(id: long): void
+  + requireId(): long
+}
+
+package users {
+  enum Role {
+    CUSTOMER
+    SALESMAN
+    MANAGER
+  }
+
+  class User {
+    - fiscalCode: String
+    - firstName: String
+    - lastName: String
+    - email: String
+    - phone: String
+    - passwordHash: String
+    - role: Role
+    - managerId: Long
+    - active: boolean
+    + displayName(): String
+    + requireRole(expected: Role): void
+    + assignManager(manager: User): void
+    + deactivate(): void
+  }
+}
+
+package vehicles {
+  class Brand {
+    - name: String
+    + name(): String
+  }
+
+  class VehicleModel {
+    - brand: Brand
+    - code: String
+    - name: String
+    - modelYear: int
+  }
+
+  enum VehiclePurpose {
+    FOR_SALE
+    RENTAL
+    ACQUISITION_REQUEST
+  }
+
+  enum VehicleStatus {
+    AVAILABLE
+    RESERVED
+    RENTED
+    TEST_DRIVE
+    SOLD
+    MAINTENANCE
+  }
+
+  class Vehicle {
+    - plate: String
+    - model: VehicleModel
+    - purpose: VehiclePurpose
+    - salePrice: BigDecimal
+    - dailyRentalRate: BigDecimal
+    - mileage: long
+    - status: VehicleStatus
+    + updateSalePrice(manager: User, price: BigDecimal): void
+    + updateDailyRentalRate(manager: User, rate: BigDecimal): void
+    + reserveForSale(): void
+    + releaseSaleReservation(): void
+    + markSold(): void
+    + startRental(): void
+    + finishRental(): void
+    + startTestDrive(): void
+    + finishTestDrive(): void
+    + sendToMaintenance(): void
+    + returnFromMaintenance(): void
+  }
+
+  class StockOrder {
+    - manager: User
+    - model: VehicleModel
+    - quantity: int
+    - unitCost: BigDecimal
+    - placedOn: LocalDate
+    - status: StockOrderStatus
+    - receivedOn: LocalDate
+    + confirm(actor: User): void
+    + receive(actor: User, date: LocalDate): void
+    + cancel(actor: User): void
+  }
+
+  enum StockOrderStatus {
+    PLACED
+    CONFIRMED
+    RECEIVED
+    CANCELLED
+  }
+}
+
+package rentals {
+  class Rental {
+    - customer: User
+    - salesman: User
+    - vehicle: Vehicle
+    - startsOn: LocalDate
+    - endsOn: LocalDate
+    - totalPrice: BigDecimal
+    - status: RentalStatus
+    + claim(candidate: User): void
+    + confirm(actor: User): void
+    + start(actor: User): void
+    + complete(actor: User): void
+    + cancel(actor: User): void
+  }
+
+  enum RentalStatus {
+    REQUESTED
+    ASSIGNED
+    CONFIRMED
+    ACTIVE
+    COMPLETED
+    CANCELLED
+  }
+
+  class TestDrive {
+    - customer: User
+    - salesman: User
+    - vehicle: Vehicle
+    - scheduledAt: LocalDateTime
+    - duration: Duration
+    - status: TestDriveStatus
+    + confirm(candidate: User): void
+    + start(actor: User): void
+    + complete(actor: User): void
+    + cancel(actor: User): void
+  }
+
+  enum TestDriveStatus {
+    REQUESTED
+    CONFIRMED
+    IN_PROGRESS
+    COMPLETED
+    CANCELLED
+  }
+}
+
+package sales {
+  class Discount {
+    - name: String
+    - vehicle: Vehicle
+    - percentage: BigDecimal
+    - startsOn: LocalDate
+    - endsOn: LocalDate
+    - enabled: boolean
+    + disable(): void
+    + appliesTo(vehicle: Vehicle, date: LocalDate): boolean
+    + apply(price: BigDecimal): BigDecimal
+  }
+
+  class SaleOrder {
+    - customer: User
+    - salesman: User
+    - vehicle: Vehicle
+    - totalPrice: BigDecimal
+    - requiredDeposit: BigDecimal
+    - paidAmount: BigDecimal
+    - status: SaleOrderStatus
+    + assignSalesman(candidate: User): void
+    + recordPayment(amount: BigDecimal): void
+    + complete(actor: User): void
+    + cancel(actor: User): void
+  }
+
+  enum SaleOrderStatus {
+    RESERVED
+    DEPOSIT_PAID
+    PAID
+    COMPLETED
+    CANCELLED
+  }
+
+  class Payment {
+    - payer: User
+    - referenceType: PaymentReferenceType
+    - referenceId: long
+    - purpose: PaymentPurpose
+    - method: PaymentMethod
+    - amount: BigDecimal
+    - createdAt: Instant
+    - status: PaymentStatus
+    - processorReference: String
+    - failureReason: String
+    + complete(processorReference: String): void
+    + fail(reason: String): void
+  }
+
+  enum PaymentStatus {
+    PENDING
+    COMPLETED
+    FAILED
+  }
+
+  class PurchaseProposal {
+    - customer: User
+    - vehicle: Vehicle
+    - requestedAmount: BigDecimal
+    - customerNotes: String
+    - requestedAt: Instant
+    - salesman: User
+    - offeredAmount: BigDecimal
+    - offerTerms: String
+    - manager: User
+    - decisionReason: String
+    - status: PurchaseProposalStatus
+    + submitOffer(candidate: User, amount: BigDecimal, terms: String): void
+    + approve(manager: User, reason: String): void
+    + reject(manager: User, reason: String): void
+  }
+
+  enum PurchaseProposalStatus {
+    REQUESTED
+    OFFERED
+    APPROVED
+    REJECTED
+  }
+}
+
+package observer {
+  interface InventorySubject {
+    + subscribe(observer: InventoryObserver): void
+    + unsubscribe(observer: InventoryObserver): void
+  }
+
+  interface InventoryObserver {
+    + onInventoryEvent(event: InventoryEvent): void
+  }
+
+  class InventoryEvent
+}
+
+BaseEntity <|-- User
+BaseEntity <|-- Brand
+BaseEntity <|-- VehicleModel
+BaseEntity <|-- Vehicle
+BaseEntity <|-- StockOrder
+BaseEntity <|-- Rental
+BaseEntity <|-- TestDrive
+BaseEntity <|-- Discount
+BaseEntity <|-- SaleOrder
+BaseEntity <|-- Payment
+BaseEntity <|-- PurchaseProposal
+InventorySubject <|.. Vehicle
+Vehicle ..> InventoryObserver
+Vehicle ..> InventoryEvent
+
+User --> Role
+User "0..1 manager" <-- "0..* salesman" User
+Brand "1" -- "0..*" VehicleModel
+VehicleModel "1" -- "0..*" Vehicle
+Vehicle --> VehiclePurpose
+Vehicle --> VehicleStatus
+Vehicle "1" -- "0..*" Discount
+User "1 customer" -- "0..*" Rental
+User "0..1 salesman" -- "0..*" Rental
+Vehicle "1" -- "0..*" Rental
+User "1 customer" -- "0..*" TestDrive
+User "0..1 salesman" -- "0..*" TestDrive
+Vehicle "1" -- "0..*" TestDrive
+User "1 customer" -- "0..*" SaleOrder
+User "0..1 salesman" -- "0..*" SaleOrder
+Vehicle "1" -- "0..*" SaleOrder
+User "1 payer" -- "0..*" Payment
+User "1 customer" -- "0..*" PurchaseProposal
+User "0..1 salesman" -- "0..*" PurchaseProposal
+User "0..1 manager" -- "0..*" PurchaseProposal
+Vehicle "1" -- "0..*" PurchaseProposal
+VehicleModel "1" -- "0..*" StockOrder
+User "1 manager" -- "0..*" StockOrder
+@enduml

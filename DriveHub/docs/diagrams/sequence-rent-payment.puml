@@ -1,0 +1,56 @@
+@startuml
+title UC-RENT-01 — Richiesta noleggio e pagamento compensato
+autonumber
+actor Customer
+boundary CustomerUI
+control ServiceUiGateway
+control RentalService
+control PaymentService
+participant PaymentGateway as "Gateway simulato"
+participant RentalUoW as "UnitOfWork noleggio"
+participant PaymentUoW as "UnitOfWork pagamento"
+database RentalDao
+database PaymentDao
+
+Customer -> CustomerUI : seleziona veicolo, date e metodo
+CustomerUI -> ServiceUiGateway : rentAndPay(...)
+ServiceUiGateway -> RentalService : requestRental(...)
+RentalService -> RentalUoW : begin
+RentalService -> RentalDao : save(REQUESTED)
+RentalService -> RentalUoW : commit
+RentalService --> ServiceUiGateway : rental
+
+ServiceUiGateway -> PaymentService : payRental(customer, rental, method)
+PaymentService -> PaymentUoW : begin
+PaymentService -> PaymentDao : completedTotal(RENTAL, rentalId)
+alt importo ancora dovuto
+  PaymentService -> PaymentDao : save(PENDING)
+  PaymentService -> PaymentGateway : charge(importo, metodo demo)
+  alt approvato
+    PaymentGateway --> PaymentService : processorReference
+    PaymentService -> PaymentDao : update(COMPLETED)
+    PaymentService -> PaymentUoW : commit
+    PaymentService --> ServiceUiGateway : COMPLETED
+    ServiceUiGateway --> CustomerUI : Rental REQUESTED
+    CustomerUI --> Customer : successo; attesa presa in carico
+  else rifiutato
+    PaymentGateway --> PaymentService : rejectionReason
+    PaymentService -> PaymentDao : update(FAILED)
+    PaymentService -> PaymentUoW : commit
+    PaymentService --> ServiceUiGateway : FAILED
+    ServiceUiGateway -> RentalService : cancelRental(rental, customer)
+    RentalService -> RentalUoW : begin
+    RentalService -> RentalDao : update(CANCELLED)
+    RentalService -> RentalUoW : commit
+    ServiceUiGateway --> CustomerUI : errore controllato
+  end
+else totale già coperto
+  PaymentService -> PaymentUoW : rollback/close
+  PaymentService --> ServiceUiGateway : conflict
+end
+
+note bottom
+  La compensazione riflette l'orchestrazione corrente. Rimane una finestra di
+  crash fra transazioni; un'unica UnitOfWork sarebbe più forte atomicamente.
+end note
+@enduml

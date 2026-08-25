@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="it.unifi.ing.drivehub.presentation.controller.ManagerWorkspaceController"
+            stylesheets="@../css/style.css" prefWidth="1280" prefHeight="800">
+    <top>
+        <HBox styleClass="app-header">
+            <Label text="⌁" styleClass="brand-mark"/><Label text="DriveHub" styleClass="brand-name"/>
+            <Region HBox.hgrow="ALWAYS"/><Label fx:id="userLabel" text="Manager"/>
+            <Button text="Aggiorna" onAction="#refresh" styleClass="secondary-button"/>
+            <Button text="Logout" onAction="#logout" styleClass="secondary-button"/>
+        </HBox>
+    </top>
+    <center>
+        <VBox styleClass="content">
+            <Label text="Area manager" styleClass="page-title"/>
+            <TabPane VBox.vgrow="ALWAYS" tabClosingPolicy="UNAVAILABLE">
+                <tabs>
+                    <Tab text="Performance dashboard">
+                        <VBox styleClass="content">
+                            <HBox spacing="15">
+                                <VBox styleClass="metric-card"><Label text="VEICOLI TOTALI" styleClass="muted"/><Label fx:id="totalVehiclesLabel" text="—" styleClass="metric-value"/></VBox>
+                                <VBox styleClass="metric-card"><Label text="NOLEGGI ATTIVI" styleClass="muted"/><Label fx:id="activeRentalsLabel" text="—" styleClass="metric-value"/></VBox>
+                                <VBox styleClass="metric-card"><Label text="INCASSI REGISTRATI" styleClass="muted"/><Label fx:id="revenueLabel" text="—" styleClass="metric-value"/></VBox>
+                                <VBox styleClass="metric-card"><Label text="PROPOSTE IN ATTESA" styleClass="muted"/><Label fx:id="pendingProposalsLabel" text="—" styleClass="metric-value"/></VBox>
+                            </HBox>
+                            <TableView fx:id="activityTable" VBox.vgrow="ALWAYS">
+                                <columns>
+                                    <TableColumn fx:id="activityTypeColumn" text="Tipo" prefWidth="180"/>
+                                    <TableColumn fx:id="activityDescriptionColumn" text="Descrizione" prefWidth="500"/>
+                                    <TableColumn fx:id="activityAmountColumn" text="Importo" prefWidth="130"/>
+                                    <TableColumn fx:id="activityDateColumn" text="Data" prefWidth="180"/>
+                                </columns>
+                            </TableView>
+                        </VBox>
+                    </Tab>
+                    <Tab text="Nuovi veicoli">
+                        <VBox styleClass="content">
+                            <Label text="Ordina nuovi veicoli per l'inventario" styleClass="section-title"/>
+                            <GridPane styleClass="form-grid">
+                                <Label text="Marchio" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+                                <TextField fx:id="orderBrandField" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+                                <Label text="Modello" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+                                <TextField fx:id="orderModelField" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+                                <Label text="Anno" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
+                                <TextField fx:id="orderYearField" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
+                                <Label text="Quantità" GridPane.rowIndex="3" GridPane.columnIndex="0"/>
+                                <TextField fx:id="orderQuantityField" GridPane.rowIndex="3" GridPane.columnIndex="1"/>
+                                <Label text="Costo unitario" GridPane.rowIndex="4" GridPane.columnIndex="0"/>
+                                <TextField fx:id="orderUnitCostField" GridPane.rowIndex="4" GridPane.columnIndex="1"/>
+                            </GridPane>
+                            <Button text="Registra ordine" onAction="#createStockOrder" styleClass="primary-button"/>
+                            <TableView fx:id="stockOrderTable" VBox.vgrow="ALWAYS">
+                                <columns>
+                                    <TableColumn fx:id="orderCodeColumn" text="Codice" prefWidth="120"/>
+                                    <TableColumn fx:id="orderModelColumn" text="Modello" prefWidth="260"/>
+                                    <TableColumn fx:id="orderQuantityColumn" text="Quantità" prefWidth="100"/>
+                                    <TableColumn fx:id="orderCostColumn" text="Costo" prefWidth="130"/>
+                                    <TableColumn fx:id="orderStatusColumn" text="Stato" prefWidth="130"/>
+                                </columns>
+                            </TableView>
+                        </VBox>
+                    </Tab>
+                    <Tab text="Prezzi e promozioni">
+                        <VBox styleClass="content">
+                            <TableView fx:id="discountVehicleTable" VBox.vgrow="ALWAYS">
+                                <columns>
+                                    <TableColumn fx:id="discountPlateColumn" text="Targa" prefWidth="130"/>
+                                    <TableColumn fx:id="discountModelColumn" text="Modello" prefWidth="260"/>
+                                    <TableColumn fx:id="discountPriceColumn" text="Prezzo" prefWidth="130"/>
+                                    <TableColumn fx:id="discountValueColumn" text="Sconto" prefWidth="120"/>
+                                </columns>
+                            </TableView>
+                            <HBox styleClass="toolbar">
+                                <TextField fx:id="newPriceField" promptText="Nuovo prezzo"/>
+                                <TextField fx:id="discountPercentField" promptText="Sconto %"/>
+                                <Button text="Aggiorna prezzo" onAction="#updatePrice" styleClass="secondary-button"/>
+                                <Button text="Applica sconto" onAction="#applyDiscount" styleClass="primary-button"/>
+                                <Button text="Rimuovi sconto" onAction="#removeDiscount" styleClass="danger-button"/>
+                            </HBox>
+                        </VBox>
+                    </Tab>
+                    <Tab text="Approvazione proposte">
+                        <VBox styleClass="content">
+                            <TableView fx:id="approvalTable" VBox.vgrow="ALWAYS">
+                                <columns>
+                                    <TableColumn fx:id="approvalCodeColumn" text="Codice" prefWidth="120"/>
+                                    <TableColumn fx:id="approvalSalesmanColumn" text="Salesman" prefWidth="180"/>
+                                    <TableColumn fx:id="approvalCustomerColumn" text="Cliente" prefWidth="180"/>
+                                    <TableColumn fx:id="approvalVehicleColumn" text="Veicolo" prefWidth="250"/>
+                                    <TableColumn fx:id="approvalAmountColumn" text="Offerta" prefWidth="120"/>
+                                </columns>
+                            </TableView>
+                            <HBox styleClass="toolbar">
+                                <Button text="Approva" onAction="#approveProposal" styleClass="primary-button"/>
+                                <Button text="Rifiuta" onAction="#rejectProposal" styleClass="danger-button"/>
+                            </HBox>
+                        </VBox>
+                    </Tab>
+                </tabs>
+            </TabPane>
+            <Label fx:id="messageLabel" wrapText="true"/>
+        </VBox>
+    </center>
+</BorderPane>
