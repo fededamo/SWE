@@ -1,0 +1,1271 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DriveHub — Relazione SWE</title>
+  <style>
+@page { size: A4; margin: 18mm 17mm 20mm; }
+html { color: #172033; background: white; }
+body {
+  font-family: "Liberation Sans", Arial, sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.45;
+  max-width: 178mm;
+  margin: 0 auto;
+}
+h1, h2, h3 { color: #12355b; line-height: 1.2; page-break-after: avoid; }
+h1 { font-size: 28pt; margin-top: 34mm; }
+h2 { font-size: 19pt; border-bottom: 2px solid #2c7da0; padding-bottom: 5px; margin-top: 18px; }
+h3 { font-size: 13.5pt; margin-top: 17px; }
+p, li { orphans: 3; widows: 3; }
+a { color: #176b87; text-decoration: none; }
+blockquote { border-left: 4px solid #2c7da0; margin-left: 0; padding: 8px 15px; background: #eef7fa; }
+table { border-collapse: collapse; width: 100%; font-size: 8.5pt; margin: 10px 0 16px; page-break-inside: auto; }
+thead { display: table-header-group; }
+tr { page-break-inside: avoid; }
+th { background: #12355b; color: white; font-weight: 600; }
+th, td { border: 1px solid #aebdca; padding: 5px 6px; vertical-align: top; }
+tr:nth-child(even) td { background: #f5f8fa; }
+code { font-family: "Liberation Mono", monospace; background: #edf1f4; padding: 1px 3px; }
+pre { background: #172033; color: #f6f8fa; padding: 10px; overflow-wrap: anywhere; white-space: pre-wrap; page-break-inside: avoid; }
+pre code { background: transparent; color: inherit; padding: 0; }
+img { display: block; max-width: 100%; max-height: 225mm; margin: 12px auto 5px; object-fit: contain; }
+.figure { page-break-inside: avoid; }
+.caption { text-align: center; color: #526477; font-size: 8.5pt; margin: 0 0 14px; }
+.cover { min-height: 245mm; text-align: center; page-break-after: always; }
+.cover h1 { margin-top: 45mm; }
+.report-meta { color: #526477; font-size: 9pt; }
+</style>
+</head>
+<body>
+<div align="center" class="cover">
+<h1>DriveHub</h1>
+<h2>Analisi, progettazione e realizzazione di un sistema informativo per concessionario</h2>
+<p><strong>Corso di Ingegneria del Software</strong><br>
+<strong>Anno Accademico 2025/2026</strong></p>
+<p>Docente: <strong>Prof. Enrico Vicario</strong></p>
+<p>Autore/i: <strong>[DA INSERIRE]</strong><br>
+Matricola/e: <strong>[DA INSERIRE]</strong></p>
+<p>Versione <strong>1.0 RC — 11 settembre 2026</strong><br>
+Commit base: <code>ed03c32289aa663dfc04b1bf0c8fda15da326b47</code><br>
+Fingerprint baseline verificata: <code>e7fb29af…aeec25</code></p>
+</div><p style="page-break-before: always"></p>
+
+<h2 id="indice-ragionato">Indice ragionato</h2>
+<ol>
+<li>Statement applicativo e metodo</li>
+<li>Fonti, scope e vocabolario</li>
+<li>Requisiti e regole di business</li>
+<li>Casi d&rsquo;uso e tracciabilità</li>
+<li>Interfaccia e navigazione</li>
+<li>Architettura e responsabilità</li>
+<li>Progettazione del dominio e dei workflow</li>
+<li>Persistenza PostgreSQL</li>
+<li>Scenari dinamici e transazioni</li>
+<li>Implementazione e pattern</li>
+<li>Strategia ed esiti dei test</li>
+<li>Uso dell&rsquo;intelligenza artificiale</li>
+<li>Assunzioni, limiti e decisioni aperte</li>
+<li>Conclusioni e guida alla discussione</li>
+</ol>
+<h2 id="1-statement-applicativo-e-metodo">1. Statement applicativo e metodo</h2>
+<p>DriveHub è un&rsquo;applicazione desktop che coordina le attività essenziali di un
+concessionario: catalogo, test drive, noleggio, vendita al cliente, acquisizione
+di veicoli proposti dal cliente, inventario, ordini, prezzi, promozioni e
+indicatori direzionali. Il problema progettuale non è una semplice anagrafica:
+più attori operano sugli stessi veicoli e gli esiti economici devono restare
+coerenti anche in presenza di errori o richieste concorrenti.</p>
+<p>L&rsquo;obiettivo è offrire a Customer, Salesman e Manager percorsi distinti,
+proteggendo nel dominio e nel database le regole che non possono dipendere dal
+solo stato dei pulsanti. La baseline usa Java 21, JavaFX 21, Maven, JDBC e
+PostgreSQL 16. Il gateway di pagamento è intenzionalmente simulato e non tratta
+dati finanziari reali.</p>
+<p>Il lavoro è stato condotto in quattro cicli verificabili:</p>
+<ol>
+<li>inventario in sola lettura delle fonti e registrazione dei conflitti;</li>
+<li>specifica di requisiti, casi d&rsquo;uso, pagine e modello dati;</li>
+<li>implementazione a strati, con transazioni e concorrenza come rischi guida;</li>
+<li>verifica su JDK 21, PostgreSQL 16 reale, JavaFX reale sotto Xvfb, UML e PDF.</li>
+</ol>
+<p>La relazione descrive il prodotto effettivamente verificato. I soli campi
+segnaposto ammessi sono nomi e matricole degli autori; le decisioni di dominio
+non determinate dalle fonti sono indicate esplicitamente nel capitolo 13.</p>
+<h2 id="2-fonti-scope-e-vocabolario">2. Fonti, scope e vocabolario</h2>
+<h3 id="21-gerarchia-e-uso-delle-fonti">2.1 Gerarchia e uso delle fonti</h3>
+<p>In caso di contrasto si è adottato l&rsquo;ordine: materiale ufficiale del corso;
+diagrammi originali DriveHub; implementazione e documentazione DriveHub;
+ChargeNet come benchmark di struttura; best practice compatibili. I file
+originali in <code>Diagrammi/</code>, il materiale didattico e <code>ChargeNet-master/</code> sono
+rimasti inalterati.</p>
+<table>
+<thead>
+<tr>
+<th>Fonte</th>
+<th>Contributo</th>
+<th>Trattamento</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>note di project work e dispense UML/testing</td>
+<td>forma della relazione, template UC, qualità dei diagrammi e categorie di test</td>
+<td>regola metodologica</td>
+</tr>
+<tr>
+<td><code>Users SWE.drawio</code></td>
+<td>attori, obiettivi e include del pagamento</td>
+<td>specifica da normalizzare</td>
+</tr>
+<tr>
+<td>page-navigation e mockup</td>
+<td>pagine e contenuti per ruolo</td>
+<td>riferimento UI, non requisito esaustivo</td>
+</tr>
+<tr>
+<td><code>SWE ER.drawio</code></td>
+<td>concetti persistenti e domande aperte</td>
+<td>ricostruzione con vincoli espliciti</td>
+</tr>
+<tr>
+<td>package diagram originale</td>
+<td>separazione presentation/business/domain/DAO</td>
+<td>vincolo architetturale</td>
+</tr>
+<tr>
+<td>ChargeNet</td>
+<td>profondità documentale e organizzazione</td>
+<td>nessuna regola del dominio copiata</td>
+</tr>
+</tbody>
+</table>
+<p>Il file originale chiamato <code>Login UI.png</code> rappresenta in realtà la
+registrazione; <code>Employee UI.png</code> rappresenta il Manager. Queste incongruenze
+sono risolte in base al contenuto, senza rinominare gli originali.</p>
+<h3 id="22-scope">2.2 Scope</h3>
+<p>Sono inclusi autenticazione, catalogo, test drive, noleggi, riserva/acquisto,
+proposta di un veicolo al concessionario, pagamenti dimostrativi, inventario,
+ordini di stock, prezzi/promozioni e dashboard. Sono esclusi sedi multiple,
+fornitori, officina, garanzie, danni, assicurazione, finanziamenti, fatturazione,
+firma digitale, notifiche reali e pagamento/rimborso reale: le fonti non
+forniscono requisiti sufficienti per modellarli correttamente.</p>
+<h3 id="23-attori-e-concetti">2.3 Attori e concetti</h3>
+<ul>
+<li>il <strong>Customer</strong> consulta e prenota, paga, compra/noleggia e propone un proprio
+  veicolo;</li>
+<li>il <strong>Salesman</strong> prende in carico test drive e noleggi, gestisce lo stato
+  operativo e formula offerte di acquisizione;</li>
+<li>il <strong>Manager</strong> legge indicatori, ordina stock, gestisce prezzi e decide sulle
+  offerte;</li>
+<li><code>User</code> è l&rsquo;identità comune con un <code>Role</code>, non un quarto attore operativo.</li>
+</ul>
+<p><code>Vehicle</code> è la risorsa condivisa. Il suo <code>purpose</code> distingue <code>RENTAL</code>,
+<code>FOR_SALE</code> e <code>ACQUISITION_REQUEST</code>; lo stato ne rappresenta la disponibilità.
+<code>Rental</code> e <code>TestDrive</code> modellano processi temporali, <code>SaleOrder</code> e <code>Payment</code>
+quelli economici, <code>PurchaseProposal</code> l&rsquo;acquisizione dal Customer e
+<code>StockOrder</code> l&rsquo;approvvigionamento.</p>
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/use-cases.png" alt="Diagramma dei casi d'uso DriveHub">
+<p class="caption">Figura 1 — Confine DriveHub, attori esterni e obiettivi utente. Il pagamento è un caso incluso, non un attore.</p>
+</div>
+
+<h3 id="24-tecnologie-e-strumenti">2.4 Tecnologie e strumenti</h3>
+<table>
+<thead>
+<tr>
+<th>Scelta</th>
+<th>Motivazione nel progetto</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Java 21</td>
+<td>target LTS tipizzato, coerente con il corso e verificato anche in container ufficiale</td>
+</tr>
+<tr>
+<td>JavaFX 21 + FXML/CSS</td>
+<td>desktop multipagina con separazione fra struttura della vista, stile e controller</td>
+</tr>
+<tr>
+<td>Maven</td>
+<td>build, dipendenze, profili, esecuzione test, JaCoCo e package riproducibili</td>
+</tr>
+<tr>
+<td>JDBC + PostgreSQL 16</td>
+<td>controllo esplicito di transazioni, constraint, lock, CAS e query proprie del DB target</td>
+</tr>
+<tr>
+<td>JUnit 5 + Mockito</td>
+<td>test parametrizzati e isolati con porte/gateway controllabili; Mockito è caricato come javaagent</td>
+</tr>
+<tr>
+<td>JaCoCo 0.8.14</td>
+<td>misura riproducibile della copertura senza trasformarla in prova di correttezza</td>
+</tr>
+<tr>
+<td>Draw.io + PlantUML</td>
+<td>originali visuali preservati e nuovi diagrammi progettuali versionabili, redatti manualmente</td>
+</tr>
+<tr>
+<td>Docker Compose</td>
+<td>database effimero e ripetibile, distinto dal volume applicativo locale</td>
+</tr>
+<tr>
+<td>AI assistiva</td>
+<td>audit e redazione con review su sorgenti, log, rendering e risultati; responsabilità agli autori</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3-requisiti-e-regole-di-business">3. Requisiti e regole di business</h2>
+<h3 id="31-requisiti-funzionali">3.1 Requisiti funzionali</h3>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>ID e obbligo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Accesso</td>
+<td>RF-AUTH-01 registrazione univoca; RF-AUTH-02 login e routing; RF-AUTH-03 logout</td>
+</tr>
+<tr>
+<td>Customer</td>
+<td>RF-CAT-01 catalogo; RF-TD-01 prenotazione test drive; RF-RENT-01/02 noleggio, consultazione e annullamento; RF-SALE-01 riserva/acquisto; RF-ACQ-01 proposta veicolo</td>
+</tr>
+<tr>
+<td>Salesman</td>
+<td>RF-TD-02 gestione test drive; RF-RENT-03 noleggi assegnati; RF-ACQ-02 offerta; RF-INV-01 inventario</td>
+</tr>
+<tr>
+<td>Manager</td>
+<td>RF-DASH-01 indicatori; RF-STOCK-01 ordini; RF-PRICE-01 prezzi/promozioni; RF-ACQ-03 decisione proposta</td>
+</tr>
+<tr>
+<td>Trasversali</td>
+<td>RF-PAY-01 pagamento dimostrativo; RF-ERR-01 messaggi comprensibili e non sensibili</td>
+</tr>
+</tbody>
+</table>
+<p>I requisiti non funzionali rendono verificabile la qualità: password protette e
+configurazione da ambiente (RNF-SEC-01), autorizzazione nel business
+(RNF-SEC-02), invarianti Java/SQL (RNF-DATA-01), atomicità
+(RNF-DATA-02), gestione della concorrenza (RNF-DATA-03), dipendenze a strati
+(RNF-QUAL-01), porte sostituibili (RNF-QUAL-02), esiti UI distinti
+(RNF-UX-01), ambiente Java 21/PostgreSQL 16 (RNF-PORT-01), dati fittizi
+(RNF-PRIV-01) e tracciabilità degli ID (RNF-DOC-01).</p>
+<h3 id="32-regole-che-guidano-il-design">3.2 Regole che guidano il design</h3>
+<table>
+<thead>
+<tr>
+<th>Gruppo</th>
+<th>Regole principali e conseguenza</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Identità</td>
+<td>email, CF, targa e codice modello unici; ruoli limitati a Customer/Salesman/Manager</td>
+</tr>
+<tr>
+<td>Catalogo</td>
+<td>ogni Vehicle ha un modello e un purpose; prezzo o tariffa sono coerenti col purpose; valori non negativi</td>
+</tr>
+<tr>
+<td>Tempo</td>
+<td><code>start &lt; end</code>; overlap incompatibili rifiutati; intervalli adiacenti ammessi</td>
+</tr>
+<tr>
+<td>Ownership</td>
+<td>il Customer vede/modifica i propri oggetti; il Salesman modifica ciò che ha preso in carico</td>
+</tr>
+<tr>
+<td>Pagamento</td>
+<td>riferimento XOR Rental/SaleOrder; purpose compatibile; importo positivo ed esattamente dovuto; singolo esito terminale</td>
+</tr>
+<tr>
+<td>Promozione</td>
+<td>massimo un record sostituibile per veicolo; percentuale in <code>(0,100)</code>; nessun cumulo</td>
+</tr>
+<tr>
+<td>Decisione</td>
+<td>solo una proposta <code>OFFERED</code> è decidibile; Manager e istante sono registrati insieme</td>
+</tr>
+<tr>
+<td>Concorrenza</td>
+<td>vendita, saldo, slot, claim e decisione devono avere un solo vincitore quando competono</td>
+</tr>
+</tbody>
+</table>
+<p>La doppia protezione dominio/database è intenzionale: il dominio fornisce
+errori significativi, mentre i constraint impediscono che altri percorsi JDBC
+creino stati impossibili.</p>
+<h2 id="4-casi-duso-e-tracciabilita">4. Casi d&rsquo;uso e tracciabilità</h2>
+<p>Sono definiti diciotto template completi. Di seguito sono sviluppati i quattro
+workflow più rischiosi; per ciascuno le alternative indicano il passo di
+origine. Gli altri casi sono riassunti nella tabella finale e sono tracciati
+fino ai test.</p>
+<h3 id="41-uc-rent-01-noleggiare-e-pagare-un-veicolo">4.1 UC-RENT-01 — Noleggiare e pagare un veicolo</h3>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Specifica</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Livello</td>
+<td>user goal</td>
+</tr>
+<tr>
+<td>Attore primario</td>
+<td>Customer</td>
+</tr>
+<tr>
+<td>Supporto</td>
+<td>gateway di pagamento simulato</td>
+</tr>
+<tr>
+<td>Trigger</td>
+<td>il Customer seleziona un veicolo <code>RENTAL</code></td>
+</tr>
+<tr>
+<td>Precondizioni</td>
+<td>sessione Customer attiva; veicolo esistente e disponibile</td>
+</tr>
+<tr>
+<td>Garanzia minima</td>
+<td>nessun noleggio è presentato come pagato senza Payment <code>COMPLETED</code></td>
+</tr>
+<tr>
+<td>Garanzia di successo</td>
+<td>Rental <code>REQUESTED</code> e Payment <code>COMPLETED</code> sono commit-tati insieme</td>
+</tr>
+<tr>
+<td>Pagine</td>
+<td>P-10 Catalogo, P-12 Noleggia, P-40 Pagamento, P-13 Prenotazioni</td>
+</tr>
+</tbody>
+</table>
+<p>Flusso base:</p>
+<ol>
+<li>Il Customer seleziona un veicolo a noleggio dal catalogo.</li>
+<li>Il sistema apre P-12.</li>
+<li>Il Customer indica inizio e fine.</li>
+<li>Il sistema valida periodo e sovrapposizioni.</li>
+<li>Il sistema calcola e mostra il preventivo autorevole.</li>
+<li>Il Customer conferma in P-40.</li>
+<li><code>CheckoutService</code> crea Rental e Payment nella stessa <code>UnitOfWork</code>.</li>
+<li>Il gateway simulato approva e il Payment diventa <code>COMPLETED</code>.</li>
+<li>Il commit conserva Rental <code>REQUESTED</code>; P-13 mostra la pratica.</li>
+</ol>
+<p>Alternative: 3a date mancanti/invertite, nessuna scrittura; 4a overlap,
+conflitto correggibile; 6a dialog annullato, nessun comando business; 7a
+preventivo cambiato, gateway non invocato; 8a rifiuto previsto, Payment
+<code>FAILED</code> e Rental <code>CANCELLED</code> sono commit-tati insieme; 8b eccezione inattesa,
+rollback di tutte le scritture.</p>
+<p>Evidenze: <code>CheckoutFunctionalTest#ftRent01AcceptedCheckout</code>,
+<code>#ftRent02Periods</code>, <code>#ftRent03DeclinedCheckout</code>, smoke reali del dialog e test
+PostgreSQL di rollback/concorrenza.</p>
+<h3 id="42-uc-sale-01-riservare-o-acquistare-un-veicolo">4.2 UC-SALE-01 — Riservare o acquistare un veicolo</h3>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Specifica</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Livello</td>
+<td>user goal</td>
+</tr>
+<tr>
+<td>Attore primario</td>
+<td>Customer</td>
+</tr>
+<tr>
+<td>Precondizioni</td>
+<td>veicolo <code>FOR_SALE</code> disponibile; sessione Customer</td>
+</tr>
+<tr>
+<td>Garanzia minima</td>
+<td>nessuna doppia vendita o eccedenza sul residuo</td>
+</tr>
+<tr>
+<td>Successo riserva</td>
+<td>ordine <code>DEPOSIT_PAID</code>, veicolo <code>RESERVED</code>, Payment <code>SALE_DEPOSIT</code></td>
+</tr>
+<tr>
+<td>Successo acquisto</td>
+<td>ordine <code>PAID</code>, veicolo <code>RESERVED</code>, Payment <code>SALE_BALANCE</code></td>
+</tr>
+<tr>
+<td>Pagine</td>
+<td>P-10 e P-40</td>
+</tr>
+</tbody>
+</table>
+<p>Flusso base:</p>
+<ol>
+<li>Il Customer seleziona un veicolo in vendita.</li>
+<li>Il servizio calcola prezzo e promozione applicabile.</li>
+<li>Il Customer sceglie acconto o acquisto integrale e conferma l&rsquo;importo.</li>
+<li>Il servizio blocca il veicolo e ricontrolla disponibilità/preventivo.</li>
+<li>Crea SaleOrder <code>RESERVED</code> e Payment nella stessa transazione.</li>
+<li>Il gateway approva.</li>
+<li>Un acconto esatto porta a <code>DEPOSIT_PAID</code>; un pagamento integrale esatto a
+   <code>PAID</code>. Il veicolo non è più acquistabile da altri.</li>
+</ol>
+<p>Alternative: 3a annullamento senza mutazioni; 4a preventivo scaduto o veicolo
+già impegnato, nessun addebito; 5a acconto/saldo non esatto, rifiuto; 6a decline,
+ordine <code>CANCELLED</code> e veicolo rilasciato atomicamente; 6b errore inatteso,
+rollback; 7a saldo già coperto, secondo pagamento rifiutato.</p>
+<p>Evidenze: <code>CheckoutFunctionalTest#ftSale01DepositBalanceDelivery</code>,
+<code>#ftSale03DeclinedDeposit</code>, <code>#ftSale03FullPurchaseOnce</code>, smoke vendita e
+<code>PostgresConcurrencyTest#doubleSale/#doubleBalance</code>.</p>
+<h3 id="43-uc-acq-03-approvare-o-rifiutare-una-proposta">4.3 UC-ACQ-03 — Approvare o rifiutare una proposta</h3>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Specifica</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Livello</td>
+<td>user goal</td>
+</tr>
+<tr>
+<td>Attore primario</td>
+<td>Manager</td>
+</tr>
+<tr>
+<td>Precondizioni</td>
+<td>sessione Manager; proposta <code>OFFERED</code></td>
+</tr>
+<tr>
+<td>Garanzia minima</td>
+<td>una decisione concorrente non sovrascrive la prima</td>
+</tr>
+<tr>
+<td>Successo</td>
+<td>stato terminale, Manager, motivazione e <code>decided_at</code> persistiti insieme</td>
+</tr>
+<tr>
+<td>Pagina</td>
+<td>P-33 Approvazioni</td>
+</tr>
+</tbody>
+</table>
+<p>Flusso base: (1) il sistema mostra le offerte in attesa; (2) il Manager ne
+seleziona una; (3) sceglie “Approva”; (4) il servizio verifica ruolo e stato;
+(5) un update compare-and-set da <code>OFFERED</code> registra <code>APPROVED</code>, revisore e
+istante; (6) la coda viene aggiornata. Alternative: 1a coda vuota; 2a nessuna
+selezione; 3a “Rifiuta” conduce a <code>REJECTED</code>; 4a un&rsquo;altra sessione ha già
+deciso, zero righe aggiornate e conflitto senza overwrite.</p>
+<p>Evidenze: <code>UserGoalsFunctionalTest#ftAcq03OfferAndBothDecisions</code>,
+<code>PurchaseProposalServiceTest#managerDecisionIsAtomic</code>, test PostgreSQL di
+round-trip dell&rsquo;istante e race CAS.</p>
+<h3 id="44-uc-pay-01-processare-un-pagamento-dimostrativo">4.4 UC-PAY-01 — Processare un pagamento dimostrativo</h3>
+<table>
+<thead>
+<tr>
+<th>Campo</th>
+<th>Specifica</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Livello</td>
+<td>subfunction inclusa da UC-RENT-01 e UC-SALE-01</td>
+</tr>
+<tr>
+<td>Attore primario</td>
+<td>Customer</td>
+</tr>
+<tr>
+<td>Supporto</td>
+<td><code>PaymentGateway</code> simulato</td>
+</tr>
+<tr>
+<td>Precondizioni</td>
+<td>riferimento e importo autorevole prodotti dal servizio</td>
+</tr>
+<tr>
+<td>Garanzia minima</td>
+<td>annullamento non scrive; failure non promuove l&rsquo;operazione</td>
+</tr>
+<tr>
+<td>Successo</td>
+<td>Payment <code>COMPLETED</code> e stato dell&rsquo;aggregato coerente nello stesso commit</td>
+</tr>
+<tr>
+<td>Pagina</td>
+<td>P-40 <code>PaymentDialog.fxml</code></td>
+</tr>
+</tbody>
+</table>
+<p>Flusso base: (1) il dialog mostra importo e riferimento non sensibile; (2) il
+Customer sceglie un metodo simulato; (3) conferma; (4) il servizio blocca il
+riferimento, verifica ownership e residuo e salva Payment <code>PENDING</code>; (5) il
+gateway approva; (6) Payment diventa <code>COMPLETED</code> e l&rsquo;aggregato viene aggiornato.
+Alternative: 2a nessun metodo; 3a annullamento; 4a non proprietario, stato non
+ammesso, importo errato o residuo zero; 5a rifiuto con Payment <code>FAILED</code>; 5b
+eccezione inattesa con rollback. Il gateway locale è privo di effetti esterni:
+con un provider reale servirebbero idempotenza e riconciliazione.</p>
+<h3 id="45-catalogo-degli-altri-casi-duso">4.5 Catalogo degli altri casi d&rsquo;uso</h3>
+<table>
+<thead>
+<tr>
+<th>Attore</th>
+<th>UC</th>
+<th>Pagine</th>
+<th>Evidenza principale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User</td>
+<td>UC-AUTH-01/02/03</td>
+<td>P-02/P-01/workspace/P-00</td>
+<td>auth funzionale, sessione e routing JavaFX</td>
+</tr>
+<tr>
+<td>Customer</td>
+<td>UC-CAT-01, UC-TD-01, UC-RENT-02, UC-ACQ-01</td>
+<td>P-10/P-11/P-13/P-14</td>
+<td>filtri, overlap, ownership e rollback proposta</td>
+</tr>
+<tr>
+<td>Salesman</td>
+<td>UC-TD-02, UC-RENT-03, UC-ACQ-02, UC-INV-01</td>
+<td>P-20…P-23</td>
+<td>lifecycle, claim CAS, offerta e Observer after-commit</td>
+</tr>
+<tr>
+<td>Manager</td>
+<td>UC-DASH-01, UC-STOCK-01, UC-PRICE-01</td>
+<td>P-30…P-32</td>
+<td>aggregati noti, ordine atomico, pricing/promozione</td>
+</tr>
+</tbody>
+</table>
+<p>La matrice di progetto collega ogni riga a controller, servizio, dominio, porta
+DAO, tabella e metodo JUnit. Tutte le righe risultano <code>V</code> nella baseline; le
+policy A-05/A-08 restano da validare come decisioni, non come difetti tecnici.</p>
+<h2 id="5-interfaccia-e-navigazione">5. Interfaccia e navigazione</h2>
+<p>La presentazione è composta da viste FXML e controller sottili. Welcome porta a
+Login o Register; autenticazione e registrazione instradano al workspace del
+ruolo; logout cancella la sessione e rende inaccessibili le route protette. I
+workspace concentrano le attività correlate in tab, preservando la selezione e
+mostrando messaggi locali quando l&rsquo;input è correggibile.</p>
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/page-navigation-customer.png" alt="Navigazione Customer">
+<p class="caption">Figura 2 — Percorso Customer: il dialog P-40 distingue conferma, rifiuto e annullamento.</p>
+</div>
+
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/page-navigation-staff.png" alt="Navigazione staff">
+<p class="caption">Figura 3 — Workspace Salesman e Manager e ritorno comune alla welcome page.</p>
+</div>
+
+<p><code>CustomerWorkspaceController</code> ottiene il preventivo dal gateway UI e apre
+realmente <code>PaymentDialog.fxml</code> sia per il noleggio sia per la vendita. Il
+<code>ChoiceDialog</code> residuo sceglie soltanto fra acconto e acquisto integrale: non
+sostituisce il dialog di pagamento. Durante un dialog il comando è protetto da
+re-entrancy; la chiusura non può diventare un successo implicito.</p>
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/postgres-customer-catalog.png" alt="Catalogo Customer JavaFX con dati PostgreSQL">
+<p class="caption">Figura 4 — Catalogo Customer caricato dal composition root reale su PostgreSQL.</p>
+</div>
+
+<div class="figure">
+<img style="width:90mm;height:auto" src="generated-assets/payment-dialog.png" alt="Dialog di pagamento dimostrativo">
+<p class="caption">Figura 5 — P-40 mostra solo importo, riferimento e metodo simulato: nessun dato di carta.</p>
+</div>
+
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/postgres-rental-confirmed.png" alt="Noleggio confermato dalla UI">
+<p class="caption">Figura 6 — Feedback dopo checkout JavaFX→business→PostgreSQL; il Payment è verificato anche dal DAO.</p>
+</div>
+
+<p>Gli screenshot sono stati acquisiti da stage JavaFX reali sotto Xvfb, non sono
+mockup ridisegnati. Rimane utile una prova umana su desktop fisico per focus,
+tastiera, accessibilità e ridimensionamento.</p>
+<h2 id="6-architettura-e-responsabilita">6. Architettura e responsabilità</h2>
+<h3 id="61-strati-e-direzione-delle-dipendenze">6.1 Strati e direzione delle dipendenze</h3>
+<p>La regola principale è <code>presentation → business → domain</code>, con il business che
+dipende dalle porte <code>dao.interfaces</code> e gli adapter PostgreSQL che le
+implementano. Il dominio non conosce JavaFX, JDBC o PostgreSQL; la presentazione
+non può accedere direttamente alla persistenza. <code>DriveHubApplication</code> è il
+composition root: costruisce data source, factory, servizi, gateway e
+navigazione.</p>
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/package-diagram.png" alt="Package diagram DriveHub">
+<p class="caption">Figura 7 — Dipendenze ammesse. Le frecce verso le porte consentono di sostituire PostgreSQL nei test.</p>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Responsabilità</th>
+<th>Dipendenze vietate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>domain.users/vehicles/rentals/sales/observer</code></td>
+<td>identità, invarianti, stati ed eventi</td>
+<td>JavaFX, JDBC, servizi</td>
+</tr>
+<tr>
+<td><code>business.services</code></td>
+<td>autorizzazione, casi d&rsquo;uso, transazioni e policy</td>
+<td>widget e SQL letterale</td>
+</tr>
+<tr>
+<td><code>dao.interfaces</code></td>
+<td>porte, <code>DaoFactory</code>, <code>UnitOfWork</code></td>
+<td>adapter e presentazione</td>
+</tr>
+<tr>
+<td><code>dao.postgres</code></td>
+<td>JDBC, mapping, query, migration</td>
+<td>decisioni UI/business</td>
+</tr>
+<tr>
+<td><code>presentation.controller/navigation/core</code></td>
+<td>binding, route, messaggi e proiezioni</td>
+<td>DAO e regole persistenti</td>
+</tr>
+</tbody>
+</table>
+<p>Sei test strutturali ispezionano le dipendenze compilate: dominio isolato,
+business limitato a dominio/porte, porte indipendenti dagli adapter, adapter
+senza business/presentation, UI senza bypass della persistenza e controller
+limitati a <code>UiGateway</code>/proiezioni.</p>
+<h3 id="62-servizi-e-policy">6.2 Servizi e policy</h3>
+<p><code>AuthService</code>, <code>CatalogService</code>, <code>RentalService</code>, <code>TestDriveService</code>,
+<code>SalesService</code>, <code>PurchaseProposalService</code>, <code>InventoryService</code>,
+<code>PricingService</code>, <code>DashboardService</code> e <code>PaymentService</code> espongono operazioni
+orientate agli use case. <code>CheckoutService</code> coordina i flussi economici che
+attraversano più aggregati; <code>UiModelMapper</code> converte i risultati per la UI senza
+decidere prezzi o transazioni.</p>
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/class-business.png" alt="Classi dei servizi business">
+<p class="caption">Figura 8 — Service layer e dipendenze verso factory, gateway e clock.</p>
+</div>
+
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/class-business-policies.png" alt="Policy business">
+<p class="caption">Figura 9 — Policy sostituibili: pricing, pagamento, transazioni ed eventi di inventario.</p>
+</div>
+
+<h2 id="7-progettazione-del-dominio-e-dei-workflow">7. Progettazione del dominio e dei workflow</h2>
+<h3 id="71-catalogo-e-identita">7.1 Catalogo e identità</h3>
+<p><code>Brand</code> e <code>VehicleModel</code> descrivono il catalogo; <code>Vehicle</code> ne rappresenta
+l&rsquo;istanza fisica. Il purpose determina quale prezzo sia obbligatorio. La targa
+normalizzata è unica. <code>User.requireRole</code> rende esplicita l&rsquo;autorizzazione di
+base, mentre ownership e stato sono controllati dai servizi che conoscono il
+caso d&rsquo;uso.</p>
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/class-domain.png" alt="Classi core del dominio">
+<p class="caption">Figura 10 — Identità, catalogo e relazioni stabili; i riferimenti persistiti non sono composizioni arbitrarie.</p>
+</div>
+
+<h3 id="72-macchine-a-stati">7.2 Macchine a stati</h3>
+<table>
+<thead>
+<tr>
+<th>Aggregato</th>
+<th>Percorso normale</th>
+<th>Uscite alternative</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TestDrive</td>
+<td><code>REQUESTED→CONFIRMED→IN_PROGRESS→COMPLETED</code></td>
+<td><code>CANCELLED</code> negli stati ammessi</td>
+</tr>
+<tr>
+<td>Rental</td>
+<td><code>REQUESTED→ASSIGNED→CONFIRMED→ACTIVE→COMPLETED</code></td>
+<td><code>CANCELLED</code> prima degli stati terminali secondo ownership/pagamento</td>
+</tr>
+<tr>
+<td>SaleOrder</td>
+<td><code>RESERVED→DEPOSIT_PAID</code> oppure <code>RESERVED→PAID→COMPLETED</code></td>
+<td><code>CANCELLED</code> su failure compatibile</td>
+</tr>
+<tr>
+<td>Payment</td>
+<td><code>PENDING→COMPLETED</code> oppure <code>PENDING→FAILED</code></td>
+<td>nessuna seconda transizione terminale</td>
+</tr>
+<tr>
+<td>PurchaseProposal</td>
+<td><code>REQUESTED→OFFERED→APPROVED/REJECTED</code></td>
+<td>decisione singola</td>
+</tr>
+<tr>
+<td>StockOrder</td>
+<td><code>PLACED→CONFIRMED→RECEIVED</code></td>
+<td>cancellazione prima della ricezione se ammessa</td>
+</tr>
+</tbody>
+</table>
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/class-domain-workflows.png" alt="Workflow noleggi e test drive">
+<p class="caption">Figura 11 — Aggregati temporali: attori, intervalli e transizioni protette.</p>
+</div>
+
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/class-domain-commercial.png" alt="Workflow commerciali">
+<p class="caption">Figura 12 — Vendita, pagamento, proposta e stock order con stati terminali espliciti.</p>
+</div>
+
+<p>La logica di stato è nell&rsquo;aggregato, non nel controller. Il DAO offre inoltre
+update condizionali quando la decisione deve essere atomica rispetto ad altre
+sessioni. Questo doppio livello evita sia transizioni illegali nel singolo
+oggetto, sia il classico “check-then-act” concorrente.</p>
+<h3 id="73-presentazione-come-adattatore">7.3 Presentazione come adattatore</h3>
+<div class="figure">
+<img style="width:165mm;height:auto" src="generated-assets/class-presentation.png" alt="Classi presentation">
+<p class="caption">Figura 13 — Controller, navigazione, sessione e gateway UI. I controller non vedono le porte DAO.</p>
+</div>
+
+<h2 id="8-persistenza-postgresql">8. Persistenza PostgreSQL</h2>
+<h3 id="81-schema-e-migration">8.1 Schema e migration</h3>
+<p>Cinque migration versionate creano e affinano lo schema. Il bootstrap registra
+ogni versione in <code>drivehub_schema_migrations</code>, è idempotente e può caricare un
+seed dimostrativo privo di dati reali. La prova finale ha avviato uno schema
+vuoto su PostgreSQL 16.15 e ha contato 22 foreign key e gli indici previsti.</p>
+<table>
+<thead>
+<tr>
+<th>Tabella</th>
+<th>Identità e riferimenti</th>
+<th>Vincoli significativi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>users</code></td>
+<td>CF/email, ruolo, <code>manager_id?</code></td>
+<td>univocità; ruolo ammesso; supervisore opzionale coerente</td>
+</tr>
+<tr>
+<td><code>brands</code>, <code>vehicle_models</code>, <code>vehicles</code></td>
+<td>Brand 1:N Model 1:N Vehicle</td>
+<td>nome/codice/targa unici; purpose/prezzo/stato coerenti</td>
+</tr>
+<tr>
+<td><code>discounts</code></td>
+<td>un veicolo</td>
+<td>un record sostituibile; <code>0 &lt; percentage &lt; 100</code>; periodo valido</td>
+</tr>
+<tr>
+<td><code>rentals</code>, <code>test_drives</code></td>
+<td>Customer, Salesman?, Vehicle</td>
+<td>intervallo valido, stato/assegnazione, protezione overlap</td>
+</tr>
+<tr>
+<td><code>sale_orders</code></td>
+<td>Customer, Salesman?, Vehicle</td>
+<td>deposito, pagato e totale coerenti</td>
+</tr>
+<tr>
+<td><code>payments</code></td>
+<td>payer e Rental XOR SaleOrder</td>
+<td>riferimento esclusivo; purpose/metodo/stato/importo coerenti</td>
+</tr>
+<tr>
+<td><code>purchase_proposals</code></td>
+<td>Customer, Vehicle, Salesman?, Manager?</td>
+<td>dati di offerta/decisione coerenti con lo stato; <code>decided_at</code></td>
+</tr>
+<tr>
+<td><code>stock_orders</code></td>
+<td>Manager e VehicleModel</td>
+<td>quantità/costo positivi; date e stato coerenti</td>
+</tr>
+</tbody>
+</table>
+<div class="figure figure-wide">
+<img style="width:165mm;height:auto" src="generated-assets/er-diagram.png" alt="Diagramma entità-relazioni DriveHub">
+<p class="caption">Figura 14 — ER canonico derivato dalle chiavi effettive e dai vincoli delle cinque migration.</p>
+</div>
+
+<h3 id="82-dao-mapping-e-query">8.2 DAO, mapping e query</h3>
+<p>Ogni aggregato ha una porta nel package <code>dao.interfaces</code>; gli adapter JDBC
+incapsulano SQL e ricostruzione. <code>JdbcEntityLoader</code> centralizza caricamenti
+correlati evitando che ogni DAO replichi il mapping. <code>UnitOfWork</code> espone porte
+legate alla stessa connessione e possiede commit, rollback e close.</p>
+<div class="figure figure-wide">
+<img style="width:165mm;height:auto" src="generated-assets/class-dao.png" alt="Porte e adapter DAO">
+<p class="caption">Figura 15 — Porte di persistenza, factory e adapter PostgreSQL coordinati dalla stessa UnitOfWork.</p>
+</div>
+
+<p>Le query critiche non sono semplici CRUD: ricerca catalogo, ownership, slot
+half-open, overlap di periodi, righe “for update”, code non assegnate e update
+compare-and-set. PostgreSQL aggiunge indici unici parziali per impedire doppie
+operazioni attive senza vietare il riuso di record cancellati.</p>
+<h2 id="9-scenari-dinamici-e-transazioni">9. Scenari dinamici e transazioni</h2>
+<h3 id="91-noleggio-e-pagamento">9.1 Noleggio e pagamento</h3>
+<div class="figure sequence">
+<img style="width:165mm;height:auto" src="generated-assets/sequence-rent-payment.png" alt="Sequenza noleggio e pagamento">
+<p class="caption">Figura 16 — Il confine di `TransactionRunner.execute` comprende Rental, Payment ed esito; quote scaduto e rollback sono espliciti.</p>
+</div>
+
+<p>Il decline è un esito previsto e viene conservato come audit <code>FAILED</code> insieme a
+Rental <code>CANCELLED</code>. Un&rsquo;eccezione inattesa, invece, propaga e fa rollback. La
+distinzione è importante: “pagamento rifiutato” è informazione di dominio,
+mentre una persistenza parziale è un difetto tecnico.</p>
+<h3 id="92-vendita-acconto-e-saldo">9.2 Vendita, acconto e saldo</h3>
+<div class="figure sequence">
+<img style="width:165mm;height:auto" src="generated-assets/sequence-sale-payment.png" alt="Sequenza vendita e pagamento">
+<p class="caption">Figura 17 — Lock del veicolo, scelta del purpose e aggiornamento dell'ordine impediscono doppia vendita e sovrapagamento.</p>
+</div>
+
+<p>L&rsquo;acconto usa <code>SALE_DEPOSIT</code> e deve coprire esattamente il deposito residuo;
+l&rsquo;acquisto integrale e il saldo usano <code>SALE_BALANCE</code> e devono coprire
+esattamente il residuo totale. Una richiesta concorrente trova il veicolo non
+più disponibile oppure perde l&rsquo;update atomico.</p>
+<h3 id="93-test-drive-e-proposta">9.3 Test drive e proposta</h3>
+<div class="figure sequence">
+<img style="width:165mm;height:auto" src="generated-assets/sequence-test-drive.png" alt="Sequenza test drive">
+<p class="caption">Figura 18 — Prenotazione, claim esclusivo e lifecycle del test drive.</p>
+</div>
+
+<div class="figure sequence">
+<img style="width:165mm;height:auto" src="generated-assets/sequence-purchase-proposal-approval.png" alt="Sequenza proposta di acquisto">
+<p class="caption">Figura 19 — Customer, Salesman e Manager cooperano; la decisione terminale usa CAS e registra l'istante.</p>
+</div>
+
+<p>I diagrammi di sequenza sono modelli progettuali scritti manualmente e
+confrontati con le firme reali; non sono reverse engineering dal codice.</p>
+<h2 id="10-implementazione-e-pattern">10. Implementazione e pattern</h2>
+<h3 id="101-unit-of-work-e-gestione-degli-errori">10.1 Unit of Work e gestione degli errori</h3>
+<p><code>TransactionRunner</code> rende unico il protocollo: apre, esegue, commit-ta e, su
+<code>RuntimeException</code> o <code>Error</code>, prova il rollback senza nascondere la causa
+originale. Il try-with-resources garantisce la chiusura.</p>
+<pre><code class="language-java">public &lt;T&gt; T execute(Function&lt;UnitOfWork, T&gt; work) {
+    try (UnitOfWork unit = daoFactory.begin()) {
+        try {
+            T result = work.apply(unit);
+            unit.commit();
+            return result;
+        } catch (RuntimeException | Error failure) {
+            try { unit.rollback(); }
+            catch (RuntimeException rollbackFailure) {
+                failure.addSuppressed(rollbackFailure);
+            }
+            throw failure;
+        }
+    }
+}
+</code></pre>
+<p>Problema risolto: evitare commit/rollback duplicati nei servizi e preservare
+l&rsquo;errore diagnostico. Partecipanti: servizio, <code>TransactionRunner</code>,
+<code>DaoFactory</code>, <code>UnitOfWork</code>. Il test <code>UT-TX-01</code> controlla anche il raro caso in
+cui il commit fallisce e il rollback produce un secondo errore.</p>
+<h3 id="102-checkout-atomico-e-preventivo-autorevole">10.2 Checkout atomico e preventivo autorevole</h3>
+<p>Il controller non crea prima la pratica e poi paga in una transazione diversa.
+<code>CheckoutService</code> racchiude l&rsquo;intero caso d&rsquo;uso e rifiuta un preventivo obsoleto
+prima di chiamare il gateway.</p>
+<pre><code class="language-java">return transactions.execute(unit -&gt; {
+    Rental rental = rentals.request(unit, customerId, vehicleId,
+            startDate, endDate);
+    requireAcceptedQuote(expectedAmount, rental.totalPrice());
+    Payment payment = payments.payRental(unit, customerId,
+            rental.requireId(), method);
+    if (payment.status() == PaymentStatus.FAILED) {
+        rental.cancel(rental.customer());
+        unit.rentals().update(rental);
+    }
+    return payment;
+});
+</code></pre>
+<p>Per la vendita lo stesso coordinatore sceglie esplicitamente il purpose:</p>
+<pre><code class="language-java">PaymentPurpose purpose = fullPurchase
+        ? PaymentPurpose.SALE_BALANCE
+        : PaymentPurpose.SALE_DEPOSIT;
+Payment payment = payments.paySaleOrder(unit, customerId,
+        order.requireId(), purpose, method, amount);
+</code></pre>
+<p>Questo è Service Layer applicato a un obiettivo utente, non una mera collezione
+di metodi CRUD. Il vantaggio è osservabile nei test di decline, quote scaduto,
+errore gateway e doppia vendita.</p>
+<h3 id="103-lock-residuo-e-purpose-del-pagamento">10.3 Lock, residuo e purpose del pagamento</h3>
+<p><code>PaymentService</code> carica l&rsquo;ordine con lock, verifica proprietario, stato e
+residuo e accetta solo l&rsquo;importo esatto richiesto:</p>
+<pre><code class="language-java">SaleOrder order = unit.saleOrders().findByIdForUpdate(orderId)
+        .orElseThrow(() -&gt; new EntityNotFoundException(&quot;sale order&quot;, orderId));
+requireOwner(customer, order.customer());
+validateSalePayment(order, purpose, amount);
+// ... salva PENDING, invoca il gateway, salva l'esito ...
+if (payment.status() == PaymentStatus.COMPLETED) {
+    order.recordPayment(amount);
+    unit.saleOrders().update(order);
+}
+</code></pre>
+<p>L&rsquo;acconto in eccesso non viene reinterpretato come saldo; il saldo parziale non
+è accettato; un ordine già coperto non produce un secondo Payment. Questa scelta
+riduce ambiguità e rende l&rsquo;oracolo ripetibile.</p>
+<h3 id="104-observer-dopo-il-commit">10.4 Observer dopo il commit</h3>
+<p><code>Vehicle</code> emette un <code>InventoryEvent</code>, ma <code>InventoryService</code> lo raccoglie durante
+la transazione e lo pubblica agli observer esterni solo dopo il commit:</p>
+<pre><code class="language-java">Vehicle changed = transactions.execute(unit -&gt; {
+    Vehicle vehicle = unit.vehicles().findByIdForUpdate(vehicleId).orElseThrow();
+    InventoryObserver collector = committedEvents::add;
+    vehicle.subscribe(collector);
+    try { vehicle.sendToMaintenance(); }
+    finally { vehicle.unsubscribe(collector); }
+    unit.vehicles().update(vehicle);
+    return vehicle;
+});
+committedEvents.forEach(this::notifyObservers);
+</code></pre>
+<p>Problema: una notifica pre-commit potrebbe mostrare in dashboard uno stato poi
+annullato. Partecipanti: <code>Vehicle</code> subject, <code>InventoryObserver</code>,
+<code>InventoryService</code> e <code>InventoryActivityFeed</code>. La collaborazione after-commit è
+provata da test di commit, rollback e unsubscribe. Un errore di un observer
+secondario è loggato dopo il commit e non rende fittizio un rollback.</p>
+<h3 id="105-strategy-dao-gateway-e-composition-root">10.5 Strategy, DAO, Gateway e Composition Root</h3>
+<ul>
+<li><strong>Strategy</strong>: <code>StandardPricingStrategy</code> sceglie lo sconto applicabile più
+  alto e non cumula candidati. <code>PricingService</code> la usa e mantiene un record
+  sostituibile; il vantaggio è poter variare la policy senza modificare gli
+  aggregati o i controller.</li>
+<li><strong>DAO + Unit of Work</strong>: le porte definiscono il linguaggio di persistenza; gli
+  adapter PostgreSQL implementano query, lock e CAS. I servizi sono testabili
+  con implementazioni in memoria o mock.</li>
+<li><strong>Gateway</strong>: <code>PaymentGateway</code> separa il workflow dal processore simulato. Non
+  raccoglie carta o credenziali. Un gateway reale richiederebbe chiavi di
+  idempotenza, outbox/riconciliazione e gestione di esiti asincroni.</li>
+<li><strong>Composition Root</strong>: <code>DriveHubApplication</code> è l&rsquo;unico punto che collega
+  configurazione, PostgreSQL, servizi, gateway UI, sessione e navigazione; ciò
+  evita service locator nascosti nei controller.</li>
+<li><strong>Mapper</strong>: <code>UiModelMapper</code> converte dominio in record di presentazione. È una
+  responsabilità di adattamento, non viene presentato come pattern GoF.</li>
+</ul>
+<p>I pattern sono inclusi perché risolvono problemi effettivi e hanno test
+osservabili; non si attribuiscono nomi decorativi a semplici classi.</p>
+<h3 id="106-configurazione-e-avvio">10.6 Configurazione e avvio</h3>
+<p><code>pom.xml</code> fissa release 21, JavaFX 21, JUnit 5, Mockito 5.20 con javaagent e
+JaCoCo 0.8.14. Le credenziali DB provengono dalle variabili documentate in
+<code>.env.example</code>; <code>.env</code> non è versionato. <code>compose.yaml</code> avvia PostgreSQL 16. La
+procedura locale è:</p>
+<pre><code class="language-bash">docker compose up -d
+mvn javafx:run
+</code></pre>
+<p>Lo script <code>scripts/test_full_stack.sh</code> usa invece credenziali casuali effimere,
+una rete isolata e rimuove le risorse al termine.</p>
+<h2 id="11-strategia-ed-esiti-dei-test">11. Strategia ed esiti dei test</h2>
+<h3 id="111-metodo">11.1 Metodo</h3>
+<p>La suite combina prospettive diverse:</p>
+<table>
+<thead>
+<tr>
+<th>Livello</th>
+<th>Tecnica</th>
+<th>Esempi di oracolo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>dominio/servizi</td>
+<td>white-box unit</td>
+<td>ramo, eccezione, transizione, chiamata/assenza di chiamata</td>
+</tr>
+<tr>
+<td>funzionale</td>
+<td>black-box via API business</td>
+<td>obiettivo attore, stato finale e scritture visibili</td>
+</tr>
+<tr>
+<td>DAO/schema</td>
+<td>gray-box integration</td>
+<td>round-trip, SQLSTATE, query, lock, CAS, rollback</td>
+</tr>
+<tr>
+<td>architettura/FXML</td>
+<td>strutturale/contratto</td>
+<td>dipendenze vietate, handler e risorse</td>
+</tr>
+<tr>
+<td>JavaFX</td>
+<td>smoke end-to-end</td>
+<td>stage, route, dialog, feedback, doppio click, persistenza reale</td>
+</tr>
+</tbody>
+</table>
+<p>Un test funzionale esprime l&rsquo;oracolo in termini di esito utente e stato
+persistito, senza dipendere dai dettagli JDBC:</p>
+<pre><code class="language-java">Payment payment = checkout.checkoutRental(customer.requireId(),
+        rentalVehicle.requireId(), DAY, DAY.plusDays(3),
+        PaymentMethod.CARD, RENT_TOTAL);
+assertEquals(PaymentStatus.COMPLETED, payment.status());
+assertEquals(RentalStatus.REQUESTED,
+        rental(payment.referenceId()).status());
+assertEquals(RENT_TOTAL, payment.amount());
+</code></pre>
+<p>Un integration test concorrente usa invece due richieste reali e un oracolo
+gray-box sul numero delle righe:</p>
+<pre><code class="language-java">oneWinner(
+    () -&gt; checkout.checkoutSale(customer.requireId(), sale.requireId(),
+            true, PaymentMethod.CARD, price, DAY),
+    () -&gt; checkout.checkoutSale(other.requireId(), sale.requireId(),
+            true, PaymentMethod.CARD, price, DAY));
+assertEquals(1, charges.get());
+assertEquals(1, count(&quot;sale_orders&quot;));
+assertEquals(1, count(&quot;payments&quot;));
+</code></pre>
+<p>H2 in modalità PostgreSQL accelera la suite standard ma non è contato come
+prova del DB target. Il profilo PostgreSQL avvia il server reale e verifica
+constraint, mapping e concorrenza con connessioni indipendenti.</p>
+<h3 id="112-risultati-riproducibili">11.2 Risultati riproducibili</h3>
+<table>
+<thead>
+<tr>
+<th>Ambiente/comando</th>
+<th style="text-align: right;">Test</th>
+<th style="text-align: right;">Failure / error / skipped</th>
+<th>Esito</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>host OpenJDK 25.0.4.1, target bytecode 21, <code>mvn clean test</code></td>
+<td style="text-align: right;">81</td>
+<td style="text-align: right;">0 / 0 / 0</td>
+<td><code>BUILD SUCCESS</code></td>
+</tr>
+<tr>
+<td>Temurin 21.0.9, suite standard</td>
+<td style="text-align: right;">81</td>
+<td style="text-align: right;">0 / 0 / 0</td>
+<td><code>BUILD SUCCESS</code></td>
+</tr>
+<tr>
+<td>Temurin 21 + PostgreSQL 16.15</td>
+<td style="text-align: right;">101</td>
+<td style="text-align: right;">0 / 0 / 0</td>
+<td><code>BUILD SUCCESS</code></td>
+</tr>
+<tr>
+<td>Temurin 21 + Xvfb/GTK, 7 smoke JavaFX</td>
+<td style="text-align: right;">88</td>
+<td style="text-align: right;">0 / 0 / 0</td>
+<td><code>BUILD SUCCESS</code></td>
+</tr>
+<tr>
+<td>full stack Temurin 21 + PostgreSQL 16.15 + 8 smoke JavaFX</td>
+<td style="text-align: right;"><strong>109</strong></td>
+<td style="text-align: right;"><strong>0 / 0 / 0</strong></td>
+<td><strong><code>BUILD SUCCESS</code>, 29,062 s Maven</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Il test JavaFX aggiuntivo del profilo full-stack attraversa il composition root,
+effettua login dei tre ruoli, carica il catalogo dal DB, conferma un noleggio e
+ricontrolla tramite DAO un Rental e un Payment <code>COMPLETED</code> dello stesso importo.</p>
+<p>Le prove PostgreSQL hanno verificato cinque migration da schema vuoto, seed
+idempotente, 22 foreign key, undici enum Java contro i CHECK effettivi,
+UNIQUE/CHECK/XOR, query di overlap, indici unici parziali, rollback e otto
+scenari concorrenti. Nei casi di vendita, saldo, pagamento noleggio, booking,
+claim e decisione viene verificato esattamente il numero di vincitori.</p>
+<h3 id="113-coverage">11.3 Coverage</h3>
+<table>
+<thead>
+<tr>
+<th>Metrica JaCoCo full-stack</th>
+<th style="text-align: right;">Coperti / totale</th>
+<th style="text-align: right;">Percentuale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>istruzioni</td>
+<td style="text-align: right;">12.604 / 16.083</td>
+<td style="text-align: right;">78,37%</td>
+</tr>
+<tr>
+<td>branch</td>
+<td style="text-align: right;">687 / 1.095</td>
+<td style="text-align: right;">62,74%</td>
+</tr>
+<tr>
+<td>linee</td>
+<td style="text-align: right;">2.532 / 3.135</td>
+<td style="text-align: right;">80,77%</td>
+</tr>
+<tr>
+<td>complessità</td>
+<td style="text-align: right;">1.019 / 1.579</td>
+<td style="text-align: right;">64,53%</td>
+</tr>
+<tr>
+<td>metodi</td>
+<td style="text-align: right;">825 / 1.025</td>
+<td style="text-align: right;">80,49%</td>
+</tr>
+<tr>
+<td>classi</td>
+<td style="text-align: right;">94 / 100</td>
+<td style="text-align: right;">94,00%</td>
+</tr>
+</tbody>
+</table>
+<p>Non è stata inventata una soglia richiesta dal corso. La coverage non misura la
+correttezza dell&rsquo;oracolo né l&rsquo;assenza di difetti; è stata privilegiata la
+copertura di invarianti, alternative, autorizzazioni, transazioni e race
+condition invece di getter e codice dichiarativo.</p>
+<h3 id="114-riproducibilita-ed-evidenze">11.4 Riproducibilità ed evidenze</h3>
+<p><code>docs/evidence/full-stack/</code> contiene log Maven sanitizzato, venti XML Surefire,
+<code>jacoco.xml</code>, riepilogo versioni/contatori e manifest dei sorgenti. Il commit
+base è <code>ed03c32</code>; poiché la consegna contiene modifiche non ancora committate,
+il manifest SHA-256 completo
+<code>e7fb29af5332d2abf13939c12de0462b99c58573cc722cfceb78dba911aeec25</code>
+identifica la baseline eseguita. Qualunque variazione a sorgenti, SQL, FXML,
+POM o Compose richiede una nuova esecuzione.</p>
+<p>Comandi:</p>
+<pre><code class="language-bash">mvn clean test
+bash scripts/test_postgres.sh
+bash scripts/test_full_stack.sh
+PLANTUML_JAR=/percorso/plantuml.jar bash scripts/render_diagrams.sh
+python3 scripts/build_report.py
+</code></pre>
+<h2 id="12-uso-dellintelligenza-artificiale">12. Uso dell&rsquo;intelligenza artificiale</h2>
+<p>Un assistente AI è stato usato per inventario e confronto delle fonti,
+individuazione delle incoerenze, supporto a requisiti/design, revisione di
+codice e test, redazione dei PlantUML manuali e composizione della relazione.
+Gli originali sono rimasti in sola lettura e ChargeNet è stato usato come
+benchmark, non come sorgente di regole o codice del dominio.</p>
+<p>Il supporto generativo non costituisce validazione accademica. Per ridurre il
+rischio di API, cardinalità o risultati inventati, i nomi sono stati confrontati
+con i sorgenti, enum e constraint con PostgreSQL, risultati con XML/log e
+diagrammi con rendering e review visiva. Agli autori restano comprensione,
+originalità, responsabilità della consegna e capacità di motivare ogni scelta.</p>
+<p>Registro sintetico:</p>
+<table>
+<thead>
+<tr>
+<th>Periodo</th>
+<th>Strumento</th>
+<th>Attività</th>
+<th>Controllo</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>23 agosto 2026</td>
+<td>Codex/OpenAI, GPT-5</td>
+<td>analisi iniziale e documentazione</td>
+<td>baseline riesaminata; nessuna approvazione attribuita all&rsquo;AI</td>
+</tr>
+<tr>
+<td>7–11 settembre 2026</td>
+<td>Codex/OpenAI, agente di coding</td>
+<td>audit, correzioni, test, UML, tracciabilità e report</td>
+<td>109 test, PostgreSQL reale, JavaFX, rendering UML, evidenze versionate</td>
+</tr>
+</tbody>
+</table>
+<h2 id="13-assunzioni-limiti-e-decisioni-aperte">13. Assunzioni, limiti e decisioni aperte</h2>
+<h3 id="131-assunzioni-progettuali-dichiarate">13.1 Assunzioni progettuali dichiarate</h3>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Assunzione</th>
+<th>Conseguenza/reversibilità</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A-05</td>
+<td>scelta pubblica del ruolo ammessa solo nel prototipo</td>
+<td>in produzione serve provisioning amministrativo</td>
+</tr>
+<tr>
+<td>A-07</td>
+<td>un record sconto sostituibile; Strategy pronta a più candidati</td>
+<td>rimuovere la unique abilita storico senza cambiare la policy</td>
+</tr>
+<tr>
+<td>A-08</td>
+<td>un noleggio operativo è modificato dal Salesman assegnatario</td>
+<td>algoritmo di assegnazione sostituibile, policy da confermare</td>
+</tr>
+<tr>
+<td>A-09</td>
+<td>giorni civili con estremo finale esclusivo</td>
+<td>convenzione da mostrare chiaramente in UI</td>
+</tr>
+<tr>
+<td>A-10</td>
+<td>SaleOrder rappresenta riserva/acquisto con deposito e saldo</td>
+<td>rimborso/scadenza richiedono nuove regole</td>
+</tr>
+<tr>
+<td>A-13</td>
+<td>gateway simulato locale, senza side effect esterni</td>
+<td>un provider reale richiede idempotenza e riconciliazione</td>
+</tr>
+</tbody>
+</table>
+<h3 id="132-decisioni-che-non-devono-essere-inventate">13.2 Decisioni che non devono essere inventate</h3>
+<p>Prima di trasformare il prototipo in prodotto servono indicazioni su:</p>
+<ul>
+<li>provisioning degli account staff e supervisione Manager–Salesman;</li>
+<li>algoritmo di assegnazione dei noleggi;</li>
+<li>percentuale/deadline dell&rsquo;acconto, rimborso e scadenza della riserva;</li>
+<li>durata degli slot, orari di apertura e fuso operativo;</li>
+<li>consegna/rientro fisico, danni, aspetti fiscali e conservazione documentale;</li>
+<li>fornitori, pagamento reale e target di deploy.</li>
+</ul>
+<p>Queste decisioni non bloccano la coerenza tecnica della baseline perché le
+funzioni non specificate sono fuori scope o isolate dietro policy/porte.</p>
+<h3 id="133-limiti-della-verifica">13.3 Limiti della verifica</h3>
+<ul>
+<li>i 17 PlantUML sono sintatticamente validi e confrontati con i sorgenti, ma il
+  rendering non dimostra da solo la correttezza semantica del modello;</li>
+<li>PostgreSQL 16.15 è stato provato in modo funzionale e concorrente, non con un
+  carico di lunga durata;</li>
+<li>gli otto smoke JavaFX istanziano stage reali sotto Xvfb, ma non sostituiscono
+  una valutazione umana di accessibilità, focus e monitor diversi;</li>
+<li>il gateway non dimostra integrazione finanziaria, deliberatamente fuori scope;</li>
+<li>nomi e matricole devono essere inseriti dagli autori prima della consegna.</li>
+</ul>
+<h2 id="14-conclusioni-e-guida-alla-discussione">14. Conclusioni e guida alla discussione</h2>
+<p>DriveHub realizza i tre percorsi di ruolo con una separazione verificata fra UI,
+servizi, dominio e persistenza. I rischi principali — pagamento atomico,
+preventivo obsoleto, doppia vendita, doppio saldo, overlap e decisione
+concorrente — sono resi espliciti nel design e possiedono test con oracolo sullo
+stato persistito. La documentazione usa gli stessi ID di requisiti, use case,
+pagine e test; diagrammi e screenshot fanno parte del prodotto verificato.</p>
+<p>Checklist per la presentazione:</p>
+<ol>
+<li>compilare autore/i e matricola/e e rigenerare il PDF;</li>
+<li>spiegare il confine <code>CheckoutService</code>/<code>UnitOfWork</code> e la differenza fra decline
+   previsto ed eccezione inattesa;</li>
+<li>mostrare perché lock, CAS e indici parziali servono insieme;</li>
+<li>motivare Strategy e Observer attraverso i rispettivi test, non solo tramite
+   il nome del pattern;</li>
+<li>distinguere test unitari, funzionali, DAO PostgreSQL e smoke JavaFX;</li>
+<li>dichiarare A-05/A-08 e i limiti del gateway senza attribuire scelte al docente;</li>
+<li>rieseguire lo script full-stack dopo ogni modifica della baseline.</li>
+</ol>
+<p>Il criterio tecnico di uscita è soddisfatto dalla prova full-stack da 109 test,
+0 failure, 0 error e 0 skipped. La consegna resta “release candidate” finché gli
+autori non compilano i dati personali ed eseguono la checklist manuale sul
+desktop usato per la discussione.</p>
+</body>
+</html>

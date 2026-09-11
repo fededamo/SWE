@@ -62,12 +62,7 @@ public final class PurchaseProposalService {
             User customer = unit.users().findById(customerId)
                     .orElseThrow(() -> new EntityNotFoundException("customer", customerId));
             customer.requireRole(Role.CUSTOMER);
-            Brand brand = unit.brands().findByName(brandName)
-                    .orElseGet(() -> unit.brands().save(Brand.create(brandName)));
-            String modelCode = acquisitionModelCode(brandName, modelName, modelYear);
-            VehicleModel model = unit.vehicleModels().findByCode(modelCode)
-                    .orElseGet(() -> unit.vehicleModels().save(
-                            VehicleModel.create(brand, modelCode, modelName, modelYear)));
+            VehicleModel model = CatalogModels.findOrCreate(unit, brandName, modelName, modelYear);
             String normalizedPlate = Vehicle.normalizePlate(plate);
             if (unit.vehicles().findByPlate(normalizedPlate).isPresent()) {
                 throw new ConflictException("plate is already registered");
@@ -108,6 +103,8 @@ public final class PurchaseProposalService {
     /** Requested items plus this salesman's own offers, without exposing colleagues' work. */
     public List<PurchaseProposal> proposalsForSalesman(long salesmanId) {
         return transactions.execute(unit -> {
+            unit.users().findById(salesmanId)
+                    .orElseThrow(() -> new EntityNotFoundException("salesman", salesmanId)).requireRole(Role.SALESMAN);
             ArrayList<PurchaseProposal> result = new ArrayList<>(unit.purchaseProposals().findRequested());
             result.addAll(unit.purchaseProposals().findBySalesman(salesmanId));
             return List.copyOf(result);
@@ -115,12 +112,19 @@ public final class PurchaseProposalService {
     }
 
     public List<PurchaseProposal> proposalsForCustomer(long customerId) {
-        return transactions.execute(unit -> List.copyOf(unit.purchaseProposals().findByCustomer(customerId)));
+        return transactions.execute(unit -> {
+            unit.users().findById(customerId)
+                    .orElseThrow(() -> new EntityNotFoundException("customer", customerId)).requireRole(Role.CUSTOMER);
+            return List.copyOf(unit.purchaseProposals().findByCustomer(customerId));
+        });
     }
 
-    public List<PurchaseProposal> awaitingManagerDecision() {
-        return transactions.execute(unit -> List.copyOf(
-                unit.purchaseProposals().findAwaitingManagerDecision()));
+    public List<PurchaseProposal> awaitingManagerDecision(long managerId) {
+        return transactions.execute(unit -> {
+            unit.users().findById(managerId).orElseThrow(() -> new EntityNotFoundException("manager", managerId))
+                    .requireRole(Role.MANAGER);
+            return List.copyOf(unit.purchaseProposals().findAwaitingManagerDecision());
+        });
     }
 
     private PurchaseProposal decide(long proposalId, long managerId, String reason, boolean approved) {
@@ -129,18 +133,12 @@ public final class PurchaseProposalService {
             User manager = unit.users().findById(managerId)
                     .orElseThrow(() -> new EntityNotFoundException("manager", managerId));
             manager.requireRole(Role.MANAGER);
-            if (!unit.purchaseProposals().decideIfOffered(proposalId, managerId, approved, reason)) {
+            if (!unit.purchaseProposals().decideIfOffered(proposalId, managerId, approved, reason, Instant.now(clock))) {
                 throw new ConflictException("proposal is no longer awaiting a manager decision");
             }
             return unit.purchaseProposals().findById(proposalId)
                     .orElseThrow(() -> new EntityNotFoundException("purchase proposal", proposalId));
         });
-    }
-
-    private static String acquisitionModelCode(String brand, String model, int year) {
-        String raw = brand + "-" + model + "-" + year;
-        String normalized = raw.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "-");
-        return "ACQ-" + normalized.replaceAll("(^-|-$)", "");
     }
 
     private static void requirePositive(BigDecimal value, String field) {

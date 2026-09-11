@@ -5,6 +5,7 @@ import it.unifi.ing.drivehub.business.exceptions.ConflictException;
 import it.unifi.ing.drivehub.business.exceptions.EntityNotFoundException;
 import it.unifi.ing.drivehub.business.strategies.PricingStrategy;
 import it.unifi.ing.drivehub.dao.interfaces.DaoFactory;
+import it.unifi.ing.drivehub.dao.interfaces.UnitOfWork;
 import it.unifi.ing.drivehub.domain.sales.SaleOrder;
 import it.unifi.ing.drivehub.domain.sales.SaleOrderStatus;
 import it.unifi.ing.drivehub.domain.users.Role;
@@ -29,23 +30,31 @@ public final class SalesService {
     /** UC-C-PURCHASE: reserves one available catalog vehicle at the current quoted price. */
     public SaleOrder reserveVehicle(long customerId, long vehicleId, BigDecimal requiredDeposit,
                                     LocalDate pricingDate) {
-        return transactions.execute(unit -> {
-            User customer = unit.users().findById(customerId)
-                    .orElseThrow(() -> new EntityNotFoundException("customer", customerId));
-            customer.requireRole(Role.CUSTOMER);
-            Vehicle vehicle = unit.vehicles().findById(vehicleId)
-                    .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
-            if (!vehicle.isAvailableForSale()) {
-                throw new ConflictException("vehicle is not available for sale");
-            }
-            BigDecimal total = pricing.salePrice(vehicle, unit.discounts().findActiveOn(pricingDate), pricingDate);
-            SaleOrder order = SaleOrder.reserve(customer, vehicle, total, requiredDeposit);
-            if (!unit.vehicles().updateStatusIfCurrent(vehicleId,
-                    VehicleStatus.AVAILABLE, VehicleStatus.RESERVED)) {
-                throw new ConflictException("vehicle was reserved by another customer");
-            }
-            return unit.saleOrders().save(order);
-        });
+        Objects.requireNonNull(requiredDeposit, "requiredDeposit");
+        return transactions.execute(unit -> reserveVehicle(unit, customerId, vehicleId, requiredDeposit, pricingDate));
+    }
+
+    SaleOrder reserveVehicle(UnitOfWork unit, long customerId, long vehicleId,
+                             BigDecimal requiredDeposit, LocalDate pricingDate) {
+        User customer = unit.users().findById(customerId)
+                .orElseThrow(() -> new EntityNotFoundException("customer", customerId));
+        customer.requireRole(Role.CUSTOMER);
+        Vehicle vehicle = unit.vehicles().findByIdForUpdate(vehicleId)
+                .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
+        if (!vehicle.isAvailableForSale()) {
+            throw new ConflictException("vehicle is not available for sale");
+        }
+        if (unit.vehicles().hasOpenBookings(vehicleId)) {
+            throw new ConflictException("Il veicolo ha prenotazioni aperte");
+        }
+        BigDecimal total = pricing.salePrice(vehicle, unit.discounts().findActiveOn(pricingDate), pricingDate);
+        BigDecimal deposit = requiredDeposit == null ? PricingService.requiredSaleDeposit(total) : requiredDeposit;
+        SaleOrder order = SaleOrder.reserve(customer, vehicle, total, deposit);
+        if (!unit.vehicles().updateStatusIfCurrent(vehicleId,
+                VehicleStatus.AVAILABLE, VehicleStatus.RESERVED)) {
+            throw new ConflictException("vehicle was reserved by another customer");
+        }
+        return unit.saleOrders().save(order);
     }
 
     public SaleOrder claimOrder(long orderId, long salesmanId) {
@@ -56,14 +65,14 @@ public final class SalesService {
             if (!unit.saleOrders().claimIfUnassigned(orderId, salesmanId)) {
                 throw new ConflictException("sale order was already claimed");
             }
-            return unit.saleOrders().findById(orderId)
+            return unit.saleOrders().findByIdForUpdate(orderId)
                     .orElseThrow(() -> new EntityNotFoundException("sale order", orderId));
         });
     }
 
     public SaleOrder completeOrder(long orderId, long salesmanId) {
         return transactions.execute(unit -> {
-            SaleOrder order = unit.saleOrders().findById(orderId)
+            SaleOrder order = unit.saleOrders().findByIdForUpdate(orderId)
                     .orElseThrow(() -> new EntityNotFoundException("sale order", orderId));
             User salesman = unit.users().findById(salesmanId)
                     .orElseThrow(() -> new EntityNotFoundException("salesman", salesmanId));
@@ -79,7 +88,7 @@ public final class SalesService {
 
     public SaleOrder cancelOrder(long orderId, long actorId) {
         return transactions.execute(unit -> {
-            SaleOrder order = unit.saleOrders().findById(orderId)
+            SaleOrder order = unit.saleOrders().findByIdForUpdate(orderId)
                     .orElseThrow(() -> new EntityNotFoundException("sale order", orderId));
             User actor = unit.users().findById(actorId)
                     .orElseThrow(() -> new EntityNotFoundException("user", actorId));
@@ -95,6 +104,10 @@ public final class SalesService {
     }
 
     public List<SaleOrder> ordersForCustomer(long customerId) {
-        return transactions.execute(unit -> List.copyOf(unit.saleOrders().findByCustomer(customerId)));
+        return transactions.execute(unit -> {
+            unit.users().findById(customerId)
+                    .orElseThrow(() -> new EntityNotFoundException("customer", customerId)).requireRole(Role.CUSTOMER);
+            return List.copyOf(unit.saleOrders().findByCustomer(customerId));
+        });
     }
 }

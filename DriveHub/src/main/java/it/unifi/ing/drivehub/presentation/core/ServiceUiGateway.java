@@ -2,90 +2,74 @@ package it.unifi.ing.drivehub.presentation.core;
 
 import it.unifi.ing.drivehub.business.exceptions.ConflictException;
 import it.unifi.ing.drivehub.business.services.AuthService;
+import it.unifi.ing.drivehub.business.services.CheckoutService;
 import it.unifi.ing.drivehub.business.services.CatalogService;
-import it.unifi.ing.drivehub.business.services.DashboardActivity;
 import it.unifi.ing.drivehub.business.services.DashboardService;
 import it.unifi.ing.drivehub.business.services.DashboardSnapshot;
 import it.unifi.ing.drivehub.business.services.InventoryService;
-import it.unifi.ing.drivehub.business.services.PaymentService;
 import it.unifi.ing.drivehub.business.services.PricingService;
 import it.unifi.ing.drivehub.business.services.PurchaseProposalService;
 import it.unifi.ing.drivehub.business.services.RegistrationRequest;
 import it.unifi.ing.drivehub.business.services.RentalService;
-import it.unifi.ing.drivehub.business.services.SalesService;
 import it.unifi.ing.drivehub.business.services.TestDriveService;
 import it.unifi.ing.drivehub.domain.rentals.Rental;
-import it.unifi.ing.drivehub.domain.rentals.TestDrive;
 import it.unifi.ing.drivehub.domain.sales.Discount;
 import it.unifi.ing.drivehub.domain.sales.Payment;
 import it.unifi.ing.drivehub.domain.sales.PaymentMethod;
-import it.unifi.ing.drivehub.domain.sales.PaymentPurpose;
 import it.unifi.ing.drivehub.domain.sales.PaymentStatus;
-import it.unifi.ing.drivehub.domain.sales.PurchaseProposal;
-import it.unifi.ing.drivehub.domain.sales.SaleOrder;
 import it.unifi.ing.drivehub.domain.users.Role;
-import it.unifi.ing.drivehub.domain.users.User;
-import it.unifi.ing.drivehub.domain.vehicles.StockOrder;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
 import it.unifi.ing.drivehub.domain.vehicles.VehiclePurpose;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleStatus;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.function.Function;
 import java.util.stream.Stream;
 
 /**
  * Application adapter that keeps JavaFX independent from persistence details.
- * It also performs the small projection and orchestration steps required by a
- * desktop screen (for example: create a rental and immediately pay it).
+ * Business services own atomic workflows; UiModelMapper owns screen projections.
  */
 public final class ServiceUiGateway implements UiGateway {
-    private static final BigDecimal DEPOSIT_RATE = new BigDecimal("0.10");
     private static final Duration DEFAULT_TEST_DRIVE_DURATION = Duration.ofMinutes(45);
 
     private final AuthService auth;
     private final CatalogService catalog;
     private final RentalService rentals;
     private final TestDriveService testDrives;
-    private final SalesService sales;
     private final PurchaseProposalService proposals;
     private final PricingService pricing;
     private final InventoryService inventory;
-    private final PaymentService payments;
+    private final CheckoutService checkout;
     private final DashboardService dashboards;
 
     public ServiceUiGateway(AuthService auth, CatalogService catalog, RentalService rentals,
-                            TestDriveService testDrives, SalesService sales,
+                            TestDriveService testDrives,
                             PurchaseProposalService proposals, PricingService pricing,
-                            InventoryService inventory, PaymentService payments,
-                            DashboardService dashboards) {
+                            InventoryService inventory,
+                            DashboardService dashboards, CheckoutService checkout) {
         this.auth = Objects.requireNonNull(auth);
         this.catalog = Objects.requireNonNull(catalog);
         this.rentals = Objects.requireNonNull(rentals);
         this.testDrives = Objects.requireNonNull(testDrives);
-        this.sales = Objects.requireNonNull(sales);
         this.proposals = Objects.requireNonNull(proposals);
         this.pricing = Objects.requireNonNull(pricing);
         this.inventory = Objects.requireNonNull(inventory);
-        this.payments = Objects.requireNonNull(payments);
+        this.checkout = Objects.requireNonNull(checkout);
         this.dashboards = Objects.requireNonNull(dashboards);
     }
 
     @Override
     public UiModels.Session login(String email, char[] password) {
-        return session(auth.login(email, password));
+        return UiModelMapper.session(auth.login(email, password));
     }
 
     @Override
@@ -93,7 +77,7 @@ public final class ServiceUiGateway implements UiGateway {
                                      String email, String phone, char[] password, Role role) {
         RegistrationRequest request = new RegistrationRequest(
                 fiscalCode, firstName, lastName, email, phone, role, null);
-        return session(auth.register(request, password));
+        return UiModelMapper.session(auth.register(request, password));
     }
 
     @Override
@@ -129,10 +113,10 @@ public final class ServiceUiGateway implements UiGateway {
     }
 
     @Override
-    public List<UiModels.VehicleItem> inventory() {
+    public List<UiModels.VehicleItem> inventory(long actorId) {
         LocalDate today = LocalDate.now();
         List<Discount> discounts = pricing.discounts();
-        return inventory.inventory().stream()
+        return inventory.inventory(actorId).stream()
                 .map(vehicle -> vehicleItem(vehicle, today, discounts, false))
                 .sorted(Comparator.comparing(UiModels.VehicleItem::plate))
                 .toList();
@@ -140,13 +124,13 @@ public final class ServiceUiGateway implements UiGateway {
 
     @Override
     public List<UiModels.TestDriveItem> customerTestDrives(long customerId) {
-        return testDrives.bookingsForCustomer(customerId).stream().map(ServiceUiGateway::testDriveItem).toList();
+        return testDrives.bookingsForCustomer(customerId).stream().map(UiModelMapper::testDriveItem).toList();
     }
 
     @Override
     public List<UiModels.TestDriveItem> manageableTestDrives(long salesmanId) {
         return testDrives.manageableBookings(salesmanId).stream()
-                .map(ServiceUiGateway::testDriveItem)
+                .map(UiModelMapper::testDriveItem)
                 .toList();
     }
 
@@ -183,26 +167,22 @@ public final class ServiceUiGateway implements UiGateway {
 
     @Override
     public void rentAndPay(long customerId, long vehicleId, LocalDate startDate, LocalDate endDate,
-                           String paymentMethod) {
-        Rental rental = rentals.requestRental(customerId, vehicleId, startDate, endDate);
-        Payment payment = payments.payRental(customerId, rental.requireId(), paymentMethod(paymentMethod));
-        if (payment.status() != PaymentStatus.COMPLETED) {
-            rentals.cancelRental(rental.requireId(), customerId);
-            throw new ConflictException("Pagamento rifiutato: " + payment.failureReason());
-        }
+                           String paymentMethod, BigDecimal expectedAmount) {
+        requireCompleted(checkout.checkoutRental(customerId, vehicleId, startDate, endDate,
+                paymentMethod(paymentMethod), expectedAmount));
     }
 
     @Override
     public List<UiModels.RentalItem> customerRentals(long customerId) {
-        return rentals.rentalsForCustomer(customerId).stream().map(ServiceUiGateway::rentalItem).toList();
+        return rentals.rentalsForCustomer(customerId).stream().map(UiModelMapper::rentalItem).toList();
     }
 
     @Override
     public List<UiModels.RentalItem> manageableRentals(long salesmanId) {
         LinkedHashMap<Long, Rental> unique = new LinkedHashMap<>();
-        Stream.concat(rentals.unassignedRentals().stream(), rentals.rentalsForSalesman(salesmanId).stream())
+        Stream.concat(rentals.unassignedRentals(salesmanId).stream(), rentals.rentalsForSalesman(salesmanId).stream())
                 .forEach(rental -> unique.put(rental.requireId(), rental));
-        return unique.values().stream().map(ServiceUiGateway::rentalItem).toList();
+        return unique.values().stream().map(UiModelMapper::rentalItem).toList();
     }
 
     @Override
@@ -232,17 +212,19 @@ public final class ServiceUiGateway implements UiGateway {
     }
 
     @Override
+    public BigDecimal quotePurchase(long vehicleId, boolean fullPurchase) {
+        return pricing.quoteSalePayment(vehicleId, fullPurchase, LocalDate.now());
+    }
+
+    @Override
     public void reserveOrPurchase(long customerId, long vehicleId, boolean fullPurchase,
-                                  String paymentMethod) {
-        LocalDate today = LocalDate.now();
-        BigDecimal total = pricing.quoteSale(vehicleId, today);
-        BigDecimal deposit = total.multiply(DEPOSIT_RATE).setScale(2, RoundingMode.HALF_UP);
-        SaleOrder order = sales.reserveVehicle(customerId, vehicleId, deposit, today);
-        BigDecimal amount = fullPurchase ? total : deposit;
-        Payment payment = payments.paySaleOrder(customerId, order.requireId(),
-                PaymentPurpose.SALE_DEPOSIT, paymentMethod(paymentMethod), amount);
+                                  String paymentMethod, BigDecimal expectedAmount) {
+        requireCompleted(checkout.checkoutSale(customerId, vehicleId, fullPurchase,
+                paymentMethod(paymentMethod), expectedAmount, LocalDate.now()));
+    }
+
+    private static void requireCompleted(Payment payment) {
         if (payment.status() != PaymentStatus.COMPLETED) {
-            sales.cancelOrder(order.requireId(), customerId);
             throw new ConflictException("Pagamento rifiutato: " + payment.failureReason());
         }
     }
@@ -257,7 +239,7 @@ public final class ServiceUiGateway implements UiGateway {
     @Override
     public List<UiModels.ProposalItem> proposalsForSalesman(long salesmanId) {
         return proposals.proposalsForSalesman(salesmanId).stream()
-                .map(ServiceUiGateway::proposalItem)
+                .map(UiModelMapper::proposalItem)
                 .toList();
     }
 
@@ -268,8 +250,8 @@ public final class ServiceUiGateway implements UiGateway {
     }
 
     @Override
-    public List<UiModels.ProposalItem> proposalsAwaitingManager() {
-        return proposals.awaitingManagerDecision().stream().map(ServiceUiGateway::proposalItem).toList();
+    public List<UiModels.ProposalItem> proposalsAwaitingManager(long managerId) {
+        return proposals.awaitingManagerDecision(managerId).stream().map(UiModelMapper::proposalItem).toList();
     }
 
     @Override
@@ -326,19 +308,13 @@ public final class ServiceUiGateway implements UiGateway {
     @Override
     public void createStockOrder(long managerId, UiModels.StockOrderRequest request) {
         Objects.requireNonNull(request, "request");
-        VehicleModel model = catalog.models().stream()
-                .filter(candidate -> candidate.brand().name().equalsIgnoreCase(request.brand().trim()))
-                .filter(candidate -> candidate.name().equalsIgnoreCase(request.model().trim()))
-                .filter(candidate -> candidate.modelYear() == request.year())
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Modello non presente in catalogo: inserirlo prima dall'inventario"));
-        inventory.placeStockOrder(managerId, model.requireId(), request.quantity(), request.unitCost());
+        inventory.placeStockOrder(managerId, request.brand(), request.model(), request.year(),
+                request.quantity(), request.unitCost());
     }
 
     @Override
-    public List<UiModels.StockOrderItem> stockOrders() {
-        return inventory.stockOrders().stream().map(ServiceUiGateway::stockOrderItem).toList();
+    public List<UiModels.StockOrderItem> stockOrders(long managerId) {
+        return inventory.stockOrders(managerId).stream().map(UiModelMapper::stockOrderItem).toList();
     }
 
     @Override
@@ -351,7 +327,7 @@ public final class ServiceUiGateway implements UiGateway {
     @Override
     public List<UiModels.ActivityItem> recentActivity(long managerId) {
         return dashboards.snapshot(managerId).recentActivity().stream()
-                .map(ServiceUiGateway::activityItem)
+                .map(UiModelMapper::activityItem)
                 .toList();
     }
 
@@ -371,7 +347,7 @@ public final class ServiceUiGateway implements UiGateway {
                 .map(Discount::percentage)
                 .max(Comparator.naturalOrder())
                 .orElse(null);
-        return new UiModels.VehicleItem(vehicle.requireId(), vehicle.plate(), vehicleName(vehicle),
+        return new UiModels.VehicleItem(vehicle.requireId(), vehicle.plate(), UiModelMapper.vehicleName(vehicle),
                 vehicle.purpose(), vehicle.mileage(), price, vehicle.status(), percentage);
     }
 
@@ -382,49 +358,6 @@ public final class ServiceUiGateway implements UiGateway {
         String searchable = (vehicle.plate() + " " + vehicle.model().brand().name() + " "
                 + vehicle.model().name() + " " + vehicle.model().code()).toLowerCase(Locale.ROOT);
         return searchable.contains(needle);
-    }
-
-    private static UiModels.Session session(User user) {
-        return new UiModels.Session(user.requireId(), user.displayName(), user.email(), user.role());
-    }
-
-    private static UiModels.TestDriveItem testDriveItem(TestDrive booking) {
-        return new UiModels.TestDriveItem(booking.requireId(), code("TD", booking.requireId()),
-                booking.customer().displayName(), vehicleName(booking.vehicle()),
-                booking.scheduledAt(), booking.status().name());
-    }
-
-    private static UiModels.RentalItem rentalItem(Rental rental) {
-        Long salesmanId = rental.salesman() == null ? null : rental.salesman().id();
-        return new UiModels.RentalItem(rental.requireId(), code("NL", rental.requireId()),
-                rental.customer().displayName(), vehicleName(rental.vehicle()), rental.startsOn(),
-                rental.endsOn(), rental.totalPrice(), rental.status().name(), salesmanId);
-    }
-
-    private static UiModels.ProposalItem proposalItem(PurchaseProposal proposal) {
-        String salesman = proposal.salesman() == null ? "—" : proposal.salesman().displayName();
-        return new UiModels.ProposalItem(proposal.requireId(), code("PR", proposal.requireId()),
-                proposal.customer().displayName(), salesman, vehicleName(proposal.vehicle()),
-                proposal.requestedAmount(), proposal.offeredAmount(), proposal.status().name());
-    }
-
-    private static UiModels.StockOrderItem stockOrderItem(StockOrder order) {
-        return new UiModels.StockOrderItem(order.requireId(), code("OR", order.requireId()),
-                modelName(order.model()), order.quantity(), order.unitCost(), order.status().name());
-    }
-
-    private static UiModels.ActivityItem activityItem(DashboardActivity activity) {
-        String type = activity.description().startsWith("Payment") ? "PAGAMENTO" : "PROPOSTA";
-        LocalDateTime date = LocalDateTime.ofInstant(activity.occurredAt(), ZoneId.systemDefault());
-        return new UiModels.ActivityItem(type, activity.description(), null, date);
-    }
-
-    private static String vehicleName(Vehicle vehicle) {
-        return modelName(vehicle.model()) + " · " + vehicle.plate();
-    }
-
-    private static String modelName(VehicleModel model) {
-        return model.brand().name() + " " + model.name() + " (" + model.modelYear() + ")";
     }
 
     private static long rentalDays(LocalDate startDate, LocalDate endDate) {
@@ -454,7 +387,4 @@ public final class ServiceUiGateway implements UiGateway {
         throw new IllegalArgumentException("Metodo di pagamento non riconosciuto");
     }
 
-    private static String code(String prefix, long id) {
-        return "%s-%05d".formatted(prefix, id);
-    }
 }

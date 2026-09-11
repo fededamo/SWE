@@ -65,10 +65,15 @@ public final class CustomerWorkspaceController extends AbstractController {
     @FXML private Label saleMessageLabel;
     @FXML private Label globalMessageLabel;
 
-    private UiModels.VehicleItem selectedVehicle;
+    private UiModels.VehicleItem testDriveVehicle;
+    private UiModels.VehicleItem rentalVehicle;
+    private boolean paymentInProgress;
 
     @FXML
     private void initialize() {
+        catalogTable.setPlaceholder(new Label("Nessun veicolo corrisponde ai filtri"));
+        testDriveTable.setPlaceholder(new Label("Non hai ancora prenotato test drive"));
+        rentalTable.setPlaceholder(new Label("Non hai ancora richieste di noleggio"));
         vehicleTypeCombo.setItems(FXCollections.observableArrayList(VehiclePurpose.FOR_SALE, VehiclePurpose.RENTAL));
         catalogPlateColumn.setCellValueFactory(v -> property(v.getValue().plate()));
         catalogModelColumn.setCellValueFactory(v -> property(v.getValue().displayName()));
@@ -87,6 +92,8 @@ public final class CustomerWorkspaceController extends AbstractController {
         rentalDatesColumn.setCellValueFactory(v -> property(v.getValue().startDate() + " → " + v.getValue().endDate()));
         rentalAmountColumn.setCellValueFactory(v -> property(money(v.getValue().amount())));
         rentalStatusColumn.setCellValueFactory(v -> property(v.getValue().status()));
+        rentalStartPicker.valueProperty().addListener((observable, oldValue, newValue) -> rentalQuoteLabel.setText("—"));
+        rentalEndPicker.valueProperty().addListener((observable, oldValue, newValue) -> rentalQuoteLabel.setText("—"));
         rentalStartPicker.setValue(LocalDate.now().plusDays(1));
         rentalEndPicker.setValue(LocalDate.now().plusDays(3));
         testDriveDatePicker.setValue(LocalDate.now().plusDays(1));
@@ -105,7 +112,6 @@ public final class CustomerWorkspaceController extends AbstractController {
             searchCatalog();
             testDriveTable.setItems(FXCollections.observableArrayList(gateway().customerTestDrives(session().userId())));
             rentalTable.setItems(FXCollections.observableArrayList(gateway().customerRentals(session().userId())));
-            globalMessageLabel.setText("");
         } catch (RuntimeException exception) {
             showError(globalMessageLabel, exception);
         }
@@ -125,55 +131,74 @@ public final class CustomerWorkspaceController extends AbstractController {
 
     @FXML
     private void selectForTestDrive() {
-        selectedVehicle = requireSelectedVehicle();
-        testDriveVehicleLabel.setText(selectedVehicle.displayName() + " · " + selectedVehicle.plate());
-        workspaceTabs.getSelectionModel().select(1);
-    }
-
-    @FXML
-    private void selectForRental() {
-        UiModels.VehicleItem vehicle = requireSelectedVehicle();
-        if (vehicle.purpose() != VehiclePurpose.RENTAL) {
-            throw new IllegalArgumentException("Seleziona un veicolo destinato al noleggio");
-        }
-        selectedVehicle = vehicle;
-        rentalVehicleLabel.setText(vehicle.displayName() + " · " + vehicle.plate());
-        workspaceTabs.getSelectionModel().select(2);
-    }
-
-    @FXML
-    private void selectForPurchase() {
         try {
-            UiModels.VehicleItem vehicle = requireSelectedVehicle();
-            if (vehicle.purpose() != VehiclePurpose.FOR_SALE) {
-                throw new IllegalArgumentException("Seleziona un veicolo in vendita");
-            }
-            ChoiceDialog<String> kind = new ChoiceDialog<>("Prenotazione con acconto", "Prenotazione con acconto", "Acquisto completo");
-            kind.setTitle("Prenota / acquista");
-            kind.setHeaderText(vehicle.displayName() + " — " + money(vehicle.price()));
-            Optional<String> chosenKind = kind.showAndWait();
-            if (chosenKind.isEmpty()) return;
-            boolean fullPurchase = chosenKind.get().startsWith("Acquisto");
-            BigDecimal paymentAmount = fullPurchase ? vehicle.price()
-                    : vehicle.price().multiply(new BigDecimal("0.10"))
-                    .setScale(2, java.math.RoundingMode.HALF_UP);
-            Optional<String> method = askPaymentMethod(paymentAmount,
-                    (fullPurchase ? "Acquisto " : "Acconto ") + vehicle.plate());
-            if (method.isEmpty()) return;
-            gateway().reserveOrPurchase(session().userId(), vehicle.id(), fullPurchase, method.get());
-            showSuccess(globalMessageLabel, fullPurchase ? "Acquisto registrato" : "Prenotazione e acconto registrati");
-            refresh();
+            testDriveVehicle = requireSelectedVehicle();
+            testDriveVehicleLabel.setText(testDriveVehicle.displayName());
+            workspaceTabs.getSelectionModel().select(1);
         } catch (RuntimeException exception) {
             showError(globalMessageLabel, exception);
         }
     }
 
     @FXML
+    private void selectForRental() {
+        try {
+            UiModels.VehicleItem vehicle = requireSelectedVehicle();
+            if (vehicle.purpose() != VehiclePurpose.RENTAL) {
+                throw new IllegalArgumentException("Seleziona un veicolo destinato al noleggio");
+            }
+            rentalVehicle = vehicle;
+            rentalVehicleLabel.setText(vehicle.displayName());
+            rentalQuoteLabel.setText("—");
+            workspaceTabs.getSelectionModel().select(2);
+        } catch (RuntimeException exception) {
+            showError(globalMessageLabel, exception);
+        }
+    }
+
+    @FXML
+    private void selectForPurchase() {
+        if (paymentInProgress) return;
+        paymentInProgress = true;
+        try {
+            UiModels.VehicleItem vehicle = requireSelectedVehicle();
+            if (vehicle.purpose() != VehiclePurpose.FOR_SALE) {
+                throw new IllegalArgumentException("Seleziona un veicolo in vendita");
+            }
+            ChoiceDialog<String> kind = new ChoiceDialog<>("Prenotazione con acconto", "Prenotazione con acconto", "Acquisto completo");
+            kind.initOwner(catalogTable.getScene().getWindow());
+            kind.setTitle("Prenota / acquista");
+            kind.setHeaderText(vehicle.displayName() + " — " + money(vehicle.price()));
+            Optional<String> chosenKind = kind.showAndWait();
+            if (chosenKind.isEmpty()) {
+                globalMessageLabel.setText("Acquisto annullato");
+                return;
+            }
+            boolean fullPurchase = chosenKind.get().startsWith("Acquisto");
+            BigDecimal paymentAmount = gateway().quotePurchase(vehicle.id(), fullPurchase);
+            Optional<String> method = askPaymentMethod(paymentAmount,
+                    (fullPurchase ? "Acquisto " : "Acconto ") + vehicle.plate());
+            if (method.isEmpty()) {
+                globalMessageLabel.setText("Pagamento annullato: nessuna operazione registrata");
+                return;
+            }
+            gateway().reserveOrPurchase(session().userId(), vehicle.id(), fullPurchase, method.get(), paymentAmount);
+            showSuccess(globalMessageLabel, fullPurchase ? "Acquisto registrato" : "Prenotazione e acconto registrati");
+            refresh();
+        } catch (RuntimeException exception) {
+            showError(globalMessageLabel, exception);
+        } finally {
+            paymentInProgress = false;
+        }
+    }
+
+    @FXML
     private void bookTestDrive() {
         try {
-            if (selectedVehicle == null) throw new IllegalArgumentException("Seleziona prima un veicolo");
+            if (testDriveVehicle == null) throw new IllegalArgumentException("Seleziona prima un veicolo");
+            if (testDriveDatePicker.getValue() == null) throw new IllegalArgumentException("Indica la data del test drive");
             LocalTime time = LocalTime.parse(testDriveTimeField.getText().trim());
-            gateway().bookTestDrive(session().userId(), selectedVehicle.id(), LocalDateTime.of(testDriveDatePicker.getValue(), time));
+            gateway().bookTestDrive(session().userId(), testDriveVehicle.id(), LocalDateTime.of(testDriveDatePicker.getValue(), time));
             showSuccess(globalMessageLabel, "Test drive prenotato");
             refresh();
         } catch (DateTimeParseException exception) {
@@ -187,7 +212,7 @@ public final class CustomerWorkspaceController extends AbstractController {
     private void quoteRental() {
         try {
             ensureRentalSelection();
-            BigDecimal quote = gateway().quoteRental(selectedVehicle.id(), rentalStartPicker.getValue(), rentalEndPicker.getValue());
+            BigDecimal quote = gateway().quoteRental(rentalVehicle.id(), rentalStartPicker.getValue(), rentalEndPicker.getValue());
             rentalQuoteLabel.setText(money(quote));
         } catch (RuntimeException exception) {
             showError(rentalMessageLabel, exception);
@@ -196,18 +221,28 @@ public final class CustomerWorkspaceController extends AbstractController {
 
     @FXML
     private void rentAndPay() {
+        if (paymentInProgress) return;
+        paymentInProgress = true;
         try {
             ensureRentalSelection();
-            BigDecimal amount = gateway().quoteRental(selectedVehicle.id(),
+            BigDecimal amount = gateway().quoteRental(rentalVehicle.id(),
                     rentalStartPicker.getValue(), rentalEndPicker.getValue());
-            Optional<String> method = askPaymentMethod(amount, "Noleggio " + selectedVehicle.plate());
-            if (method.isEmpty()) return;
-            gateway().rentAndPay(session().userId(), selectedVehicle.id(), rentalStartPicker.getValue(), rentalEndPicker.getValue(), method.get());
-            showSuccess(rentalMessageLabel, "Pagamento simulato riuscito e noleggio confermato");
+            Optional<String> method = askPaymentMethod(amount, "Noleggio " + rentalVehicle.plate());
+            if (method.isEmpty()) {
+                rentalMessageLabel.setText("Pagamento annullato: nessuna operazione registrata");
+                return;
+            }
+            gateway().rentAndPay(session().userId(), rentalVehicle.id(), rentalStartPicker.getValue(), rentalEndPicker.getValue(), method.get(), amount);
+            rentalVehicle = null;
+            rentalVehicleLabel.setText("Seleziona un veicolo dal catalogo");
+            showSuccess(rentalMessageLabel, "Pagamento riuscito: richiesta in attesa di presa in carico");
             refresh();
+            showSuccess(globalMessageLabel, "Noleggio pagato e richiesto: attende la presa in carico");
             workspaceTabs.getSelectionModel().select(3);
         } catch (RuntimeException exception) {
             showError(rentalMessageLabel, exception);
+        } finally {
+            paymentInProgress = false;
         }
     }
 
@@ -247,7 +282,7 @@ public final class CustomerWorkspaceController extends AbstractController {
     }
 
     private void ensureRentalSelection() {
-        if (selectedVehicle == null || selectedVehicle.purpose() != VehiclePurpose.RENTAL) {
+        if (rentalVehicle == null || rentalVehicle.purpose() != VehiclePurpose.RENTAL) {
             throw new IllegalArgumentException("Seleziona prima un veicolo a noleggio");
         }
         if (rentalStartPicker.getValue() == null || rentalEndPicker.getValue() == null) {

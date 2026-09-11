@@ -64,12 +64,22 @@ Le credenziali reali non devono essere versionate. `.env` è ignorato da Git.
 ```bash
 mvn clean test
 mvn package
+bash scripts/test_postgres.sh       # PostgreSQL 16 reale, database effimero
+bash scripts/test_full_stack.sh     # JDK 21 + PostgreSQL 16 + JavaFX/Xvfb
 ```
 
-La suite copre dominio, servizi, contratti FXML, vincoli architetturali,
-migrazioni e query DAO in H2/PostgreSQL mode. Il target ufficiale è Java 21;
-su JDK 25 il profilo Maven `jdk-25-verification` disattiva automaticamente la
-sola strumentazione JaCoCo incompatibile, senza saltare i test.
+La suite standard copre dominio, servizi, contratti FXML, vincoli
+architetturali e DAO in H2/PostgreSQL mode; H2 non è considerato equivalente a
+PostgreSQL. Gli script dedicati verificano migration, constraint, query,
+concorrenza e rollback su PostgreSQL 16 e i flussi JavaFX reali sotto Xvfb. Il
+target ufficiale è Java 21. Mockito è caricato esplicitamente come javaagent,
+evitando il self-attach di Byte Buddy; JaCoCo 0.8.14 funziona anche sulla JDK 25
+presente nell'ambiente di revisione.
+
+Baseline verificata l'11 settembre 2026: 81 test standard, 101 con PostgreSQL,
+88 con JavaFX e 109 full-stack, sempre con 0 failure/error/skipped. Evidenze e
+limiti sono in [`docs/VERIFICA_FINALE.md`](docs/VERIFICA_FINALE.md); la relazione
+consegnabile è `Relazione_SWE/DriveHub_Relazione.pdf`.
 
 ## Struttura
 

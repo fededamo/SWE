@@ -15,6 +15,7 @@ engineering dal codice.
 - [Matrice di tracciabilità](MATRICE_TRACCIABILITA.md)
 - [Architettura e modello relazionale](ARCHITETTURA_E_DATI.md)
 - [Piano di test](PIANO_TEST.md)
+- [Registro di verifica finale](VERIFICA_FINALE.md)
 - [Manuale utente](MANUALE_UTENTE.md)
 - [Documentazione dell'uso di AI](USO_AI.md)
 - [Sorgenti dei diagrammi](diagrams/)
@@ -23,9 +24,9 @@ engineering dal codice.
 ## Stato del documento
 
 Requisiti, diagrammi e riferimenti architetturali sono allineati alla baseline
-finale. Il 23 agosto 2026 la suite offline ha superato 43 test su 43; dettagli,
-ambiente e limiti (PostgreSQL live, GUI e JaCoCo) sono registrati nel piano di
-test.
+dell'11 settembre 2026. La verifica full-stack su JDK 21, PostgreSQL 16 e JavaFX
+ha superato 109 test su 109 e ha prodotto JaCoCo; dettagli, fingerprint e limiti
+sono nel registro di verifica finale.
 
 ## Convenzioni
 

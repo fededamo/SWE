@@ -13,7 +13,7 @@
     <ComboBox fx:id="methodCombo" promptText="Metodo simulato" maxWidth="Infinity"/>
     <Label fx:id="messageLabel" wrapText="true"/>
     <HBox spacing="10">
-        <Button text="Annulla" onAction="#cancel" styleClass="secondary-button"/>
-        <Button text="Conferma pagamento" onAction="#confirm" styleClass="primary-button"/>
+        <Button text="Annulla" cancelButton="true" onAction="#cancel" styleClass="secondary-button"/>
+        <Button text="Conferma pagamento" defaultButton="true" onAction="#confirm" styleClass="primary-button"/>
     </HBox>
 </VBox>

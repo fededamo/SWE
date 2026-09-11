@@ -105,6 +105,7 @@ public final class Rental extends BaseEntity {
     }
 
     public void cancel(User actor) {
+        Objects.requireNonNull(actor, "actor").requireRole(actor.role());
         if (status == RentalStatus.ACTIVE || status == RentalStatus.COMPLETED || status == RentalStatus.CANCELLED) {
             throw new DomainRuleViolationException("rental cannot be cancelled in status " + status);
         }

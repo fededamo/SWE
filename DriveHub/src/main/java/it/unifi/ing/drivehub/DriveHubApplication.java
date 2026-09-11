@@ -5,8 +5,10 @@ import it.unifi.ing.drivehub.business.core.PaymentGatewayResult;
 import it.unifi.ing.drivehub.business.security.Pbkdf2PasswordHasher;
 import it.unifi.ing.drivehub.business.services.AuthService;
 import it.unifi.ing.drivehub.business.services.CatalogService;
+import it.unifi.ing.drivehub.business.services.CheckoutService;
 import it.unifi.ing.drivehub.business.services.DashboardService;
 import it.unifi.ing.drivehub.business.services.InventoryService;
+import it.unifi.ing.drivehub.business.services.InventoryActivityFeed;
 import it.unifi.ing.drivehub.business.services.PaymentService;
 import it.unifi.ing.drivehub.business.services.PricingService;
 import it.unifi.ing.drivehub.business.services.PurchaseProposalService;
@@ -64,20 +66,31 @@ public final class DriveHubApplication extends Application {
         DaoFactory daoFactory = new PostgresDaoFactory(dataSource);
 
         PricingStrategy pricingStrategy = new StandardPricingStrategy();
-        PaymentGateway demoPaymentGateway = (amount, method) ->
-                PaymentGatewayResult.approved("DEMO-" + UUID.randomUUID());
+        String outcome = System.getProperty("drivehub.payment.outcome",
+                System.getenv().getOrDefault("DRIVEHUB_PAYMENT_OUTCOME", "approved"));
+        if (!outcome.equals("approved") && !outcome.equals("declined")) {
+            throw new IllegalArgumentException("drivehub.payment.outcome: usare approved o declined");
+        }
+        PaymentGateway demoPaymentGateway = (amount, method) -> outcome.equals("declined")
+                ? PaymentGatewayResult.rejected("Rifiuto dimostrativo configurato")
+                : PaymentGatewayResult.approved("DEMO-" + UUID.randomUUID());
+        InventoryService inventory = new InventoryService(daoFactory);
+        InventoryActivityFeed feed = new InventoryActivityFeed();
+        inventory.addObserver(feed);
 
+        RentalService rentals = new RentalService(daoFactory, pricingStrategy);
+        SalesService sales = new SalesService(daoFactory, pricingStrategy);
+        PaymentService payments = new PaymentService(daoFactory, demoPaymentGateway);
+        CheckoutService checkout = new CheckoutService(daoFactory, rentals, sales, payments);
         return new ServiceUiGateway(
                 new AuthService(daoFactory, new Pbkdf2PasswordHasher()),
                 new CatalogService(daoFactory),
-                new RentalService(daoFactory, pricingStrategy),
+                rentals,
                 new TestDriveService(daoFactory),
-                new SalesService(daoFactory, pricingStrategy),
                 new PurchaseProposalService(daoFactory),
                 new PricingService(daoFactory, pricingStrategy),
-                new InventoryService(daoFactory),
-                new PaymentService(daoFactory, demoPaymentGateway),
-                new DashboardService(daoFactory));
+                inventory,
+                new DashboardService(daoFactory, feed), checkout);
     }
 
     private static void showStartupFailure(Stage stage, RuntimeException failure) {
@@ -88,7 +101,7 @@ public final class DriveHubApplication extends Application {
                 Puoi usare: cp .env.example .env && docker compose up -d
 
                 Dettaglio: %s
-                """.formatted(rootMessage(failure)));
+                """.formatted("Configurazione o connessione non disponibile"));
         guidance.setWrapText(true);
         VBox content = new VBox(18, title, guidance);
         content.setPadding(new Insets(36));
@@ -101,15 +114,6 @@ public final class DriveHubApplication extends Application {
         stage.setScene(scene);
         stage.setTitle("DriveHub — configurazione richiesta");
         stage.show();
-    }
-
-    private static String rootMessage(Throwable failure) {
-        Throwable current = failure;
-        while (current.getCause() != null && current.getCause() != current) {
-            current = current.getCause();
-        }
-        String message = current.getMessage();
-        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
     }
 
     public static void main(String[] args) {

@@ -44,6 +44,12 @@ final class PostgresStockOrderDao extends AbstractPostgresDao implements StockOr
     }
 
     @Override
+    public Optional<StockOrder> findByIdForUpdate(long id) {
+        return findOne("SELECT id FROM stock_orders WHERE id = ? FOR UPDATE",
+                statement -> statement.setLong(1, id), loader::stockOrder, "Could not lock stock order");
+    }
+
+    @Override
     public List<StockOrder> findAll() {
         return findMany("SELECT id FROM stock_orders ORDER BY placed_on DESC, id", statement -> { },
                 loader::stockOrder, "Could not list stock orders");

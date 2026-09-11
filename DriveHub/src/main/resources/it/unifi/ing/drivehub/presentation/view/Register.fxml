@@ -15,7 +15,7 @@
         <Label text="Crea account" styleClass="page-title"/>
         <GridPane styleClass="form-grid">
             <Label text="Codice fiscale" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
-            <TextField fx:id="fiscalCodeField" promptText="RSSMRA80A01H501U" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+            <TextField fx:id="fiscalCodeField" promptText="DEMOUSER00000001" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
             <Label text="Nome" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
             <TextField fx:id="firstNameField" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
             <Label text="Cognome" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
@@ -29,7 +29,7 @@
             <Label text="Ruolo" GridPane.rowIndex="6" GridPane.columnIndex="0"/>
             <ComboBox fx:id="roleCombo" promptText="Seleziona un ruolo" GridPane.rowIndex="6" GridPane.columnIndex="1" maxWidth="Infinity"/>
         </GridPane>
-        <Label text="Nota: l'autoregistrazione dello staff è mantenuta perché prevista dai diagrammi; in produzione richiederebbe provisioning amministrativo."
+        <Label text="Modalità dimostrativa: puoi provare tutti e tre i ruoli."
                wrapText="true" styleClass="muted"/>
         <Label fx:id="errorLabel" styleClass="danger-text" wrapText="true"/>
         <Button text="REGISTRATI" onAction="#register" styleClass="primary-button" maxWidth="Infinity"/>

@@ -94,6 +94,7 @@ public final class TestDrive extends BaseEntity {
     }
 
     public void cancel(User actor) {
+        Objects.requireNonNull(actor, "actor").requireRole(actor.role());
         if (status == TestDriveStatus.IN_PROGRESS || status == TestDriveStatus.COMPLETED
                 || status == TestDriveStatus.CANCELLED) {
             throw new DomainRuleViolationException("test drive cannot be cancelled in status " + status);

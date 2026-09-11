@@ -175,7 +175,8 @@ final class JdbcEntityLoader {
                     row.getString("offer_terms"),
                     managerId == null ? null : requireUser(managerId),
                     row.getString("decision_reason"),
-                    PurchaseProposalStatus.valueOf(row.getString("status")));
+                    PurchaseProposalStatus.valueOf(row.getString("status")),
+                    row.getTimestamp("decided_at") == null ? null : row.getTimestamp("decided_at").toInstant());
         });
     }
 

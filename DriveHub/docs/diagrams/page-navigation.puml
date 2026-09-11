@@ -1,62 +1,37 @@
 @startuml
 !pragma layout smetana
-title DriveHub — Navigazione delle pagine
 skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 17
+skinparam classAttributeIconSize 0
+skinparam dpi 150
+title Pagine pubbliche e instradamento per ruolo
 hide empty description
-
 [*] --> Welcome
+state "P-00 Welcome" as Welcome
+state "P-01 Login" as Login
+state "P-02 Registrazione" as Register
+state Router <<choice>>
+state "Customer: P-10..P-14" as Customer
+state "Salesman: P-20..P-23" as Salesman
+state "Manager: P-30..P-33" as Manager
 Welcome --> Login : Accedi
 Welcome --> Register : Registrati
+Login --> Welcome : Indietro
 Login --> Register : Crea account
-Register --> Login : Ho già un account
-
-Login --> RoleRouter : credenziali valide
-Login --> Login : errore
-Register --> RoleRouter : registrazione valida\n+sessione aperta
-Register --> Register : validazione/errore
-
-state RoleRouter <<choice>>
-RoleRouter --> CustomerWorkspace : CUSTOMER
-RoleRouter --> SalesmanWorkspace : SALESMAN
-RoleRouter --> ManagerWorkspace : MANAGER
-RoleRouter --> Welcome : ruolo non valido\n+sessione chiusa
-
-state CustomerWorkspace {
-  [*] --> Catalogo
-  Catalogo --> TestDrive : prenota
-  Catalogo --> Noleggia : veicolo RENTAL
-  Catalogo --> Payment : riserva/acquista
-  Noleggia --> Payment : conferma preventivo
-  Payment --> Prenotazioni : pagamento noleggio riuscito
-  Payment --> Catalogo : pagamento vendita riuscito
-  Payment --> Noleggia : fallito/annullato noleggio
-  Payment --> Catalogo : fallito/annullato vendita
-  Catalogo --> VendiVeicolo
-  Prenotazioni --> Prenotazioni : aggiorna/annulla
-}
-
-state SalesmanWorkspace {
-  [*] --> GestioneTestDrive
-  GestioneTestDrive --> GestioneTestDrive : conferma/avvia/completa
-  GestioneNoleggi --> GestioneNoleggi : assegna/conferma/avvia/completa
-  Proposte --> Proposte : formula offerta
-  Inventario --> Inventario : aggiorna stato
-}
-
-state ManagerWorkspace {
-  [*] --> Dashboard
-  Dashboard --> Dashboard : aggiorna
-  NuoviVeicoli --> NuoviVeicoli : crea/aggiorna ordine
-  PrezziPromozioni --> PrezziPromozioni : prezzo/sconto
-  Approvazioni --> Approvazioni : approva/rifiuta
-}
-
-CustomerWorkspace --> Welcome : Logout
-SalesmanWorkspace --> Welcome : Logout
-ManagerWorkspace --> Welcome : Logout
-
-note right of Register
-  Login UI.png raffigura in realtà
-  la registrazione (“CREATE ACCOUNT”).
+Register --> Login : Torna all'accesso
+Login --> Login : errore; password cancellata
+Register --> Register : dati non validi
+Login --> Router : sessione aperta
+Register --> Router : account creato / sessione aperta
+Router --> Customer : CUSTOMER
+Router --> Salesman : SALESMAN
+Router --> Manager : MANAGER
+Customer --> Welcome : logout / session.clear()
+Salesman --> Welcome : logout / session.clear()
+Manager --> Welcome : logout / session.clear()
+note bottom of Router
+  Route non pubblica richiede sessione e ruolo.
+  Guard fallito: eccezione; nessun cambio pagina.
 end note
 @enduml

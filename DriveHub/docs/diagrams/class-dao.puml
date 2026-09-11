@@ -1,164 +1,56 @@
 @startuml
 !pragma layout smetana
-title DriveHub — Classi DAO e adapter PostgreSQL
-skinparam classAttributeIconSize 0
 skinparam shadowing false
-
-package "dao.interfaces" {
-  interface DaoFactory {
-    + begin(): UnitOfWork
-  }
-
-  interface UnitOfWork {
-    + users(): UserDao
-    + brands(): BrandDao
-    + vehicleModels(): VehicleModelDao
-    + vehicles(): VehicleDao
-    + discounts(): DiscountDao
-    + rentals(): RentalDao
-    + testDrives(): TestDriveDao
-    + saleOrders(): SaleOrderDao
-    + purchaseProposals(): PurchaseProposalDao
-    + payments(): PaymentDao
-    + stockOrders(): StockOrderDao
-    + commit(): void
-    + rollback(): void
-    + close(): void
-  }
-
-  interface UserDao {
-    + save(user: User): User
-    + update(user: User): void
-    + findByEmail(email: String): Optional<User>
-    + findByFiscalCode(code: String): Optional<User>
-  }
-
-  interface BrandDao
-  interface VehicleModelDao
-
-  interface VehicleDao {
-    + findAvailableForSale(): List<Vehicle>
-    + findAvailableForRental(): List<Vehicle>
-    + updateStatusIfCurrent(id: long, expected: VehicleStatus, next: VehicleStatus): boolean
-  }
-
-  interface DiscountDao
-
-  interface RentalDao {
-    + findUnassigned(): List<Rental>
-    + claimIfUnassigned(rentalId: long, salesmanId: long): boolean
-  }
-
-  interface TestDriveDao {
-    + existsOverlapping(vehicleId: long, startsAt: LocalDateTime, endsAt: LocalDateTime): boolean
-    + confirmIfUnassigned(testDriveId: long, salesmanId: long): boolean
-  }
-
-  interface SaleOrderDao {
-    + claimIfUnassigned(orderId: long, salesmanId: long): boolean
-  }
-
-  interface PurchaseProposalDao {
-    + submitOfferIfRequested(id: long, salesmanId: long, amount: BigDecimal, terms: String): boolean
-    + decideIfOffered(id: long, managerId: long, approved: boolean, reason: String): boolean
-  }
-
-  interface PaymentDao {
-    + findByReference(type: PaymentReferenceType, referenceId: long): List<Payment>
-  }
-
-  interface StockOrderDao
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 17
+skinparam classAttributeIconSize 0
+skinparam dpi 150
+title DAO — Porte e sessione JDBC (vista rappresentativa)
+interface DaoFactory {
+ + begin(): UnitOfWork
 }
-
-package "dao.postgres" {
-  abstract class AbstractPostgresDao {
-    # connection: Connection
-    # loader: JdbcEntityLoader
-  }
-
-  class PostgresDaoFactory {
-    - dataSource: DataSource
-    + begin(): UnitOfWork
-  }
-
-  class PostgresUnitOfWork {
-    - connection: Connection
-    - completed: boolean
-    - closed: boolean
-    + users(): UserDao
-    + brands(): BrandDao
-    + vehicleModels(): VehicleModelDao
-    + vehicles(): VehicleDao
-    + discounts(): DiscountDao
-    + rentals(): RentalDao
-    + testDrives(): TestDriveDao
-    + saleOrders(): SaleOrderDao
-    + purchaseProposals(): PurchaseProposalDao
-    + payments(): PaymentDao
-    + stockOrders(): StockOrderDao
-    + commit(): void
-    + rollback(): void
-    + close(): void
-  }
-
-  class PostgresUserDao
-  class PostgresBrandDao
-  class PostgresVehicleModelDao
-  class PostgresVehicleDao
-  class PostgresDiscountDao
-  class PostgresRentalDao
-  class PostgresTestDriveDao
-  class PostgresSaleOrderDao
-  class PostgresPurchaseProposalDao
-  class PostgresPaymentDao
-  class PostgresStockOrderDao
-  class JdbcEntityLoader
-  class DriverManagerDataSource
-  class DatabaseConfig
-  class DatabaseBootstrap
-  class SqlScriptRunner
+interface UnitOfWork {
+ + vehicles(): VehicleDao
+ + rentals(): RentalDao
+ + payments(): PaymentDao
+ + commit(): void
+ + rollback(): void
+ + close(): void
 }
-
+interface VehicleDao {
+ + findByIdForUpdate(id: long): Optional<Vehicle>
+ + hasOpenBookings(vehicleId: long): boolean
+ + updateStatusIfCurrent(vehicleId: long, expected: VehicleStatus, next: VehicleStatus): boolean
+}
+interface RentalDao {
+ + findAll(): List<Rental>
+ + claimIfUnassigned(rentalId: long, salesmanId: long): boolean
+}
+interface PaymentDao {
+ + save(payment: Payment): Payment
+ + update(payment: Payment): void
+}
+class PostgresDaoFactory
+class PostgresUnitOfWork
+class PostgresVehicleDao
+class JdbcEntityLoader
+interface Connection <<JDBC>>
 PostgresDaoFactory ..|> DaoFactory
 PostgresUnitOfWork ..|> UnitOfWork
-PostgresDaoFactory --> DriverManagerDataSource
-DriverManagerDataSource --> DatabaseConfig
-DatabaseBootstrap --> SqlScriptRunner
-
-AbstractPostgresDao <|-- PostgresUserDao
-AbstractPostgresDao <|-- PostgresBrandDao
-AbstractPostgresDao <|-- PostgresVehicleModelDao
-AbstractPostgresDao <|-- PostgresVehicleDao
-AbstractPostgresDao <|-- PostgresDiscountDao
-AbstractPostgresDao <|-- PostgresRentalDao
-AbstractPostgresDao <|-- PostgresTestDriveDao
-AbstractPostgresDao <|-- PostgresSaleOrderDao
-AbstractPostgresDao <|-- PostgresPurchaseProposalDao
-AbstractPostgresDao <|-- PostgresPaymentDao
-AbstractPostgresDao <|-- PostgresStockOrderDao
-
-PostgresUserDao ..|> UserDao
-PostgresBrandDao ..|> BrandDao
-PostgresVehicleModelDao ..|> VehicleModelDao
 PostgresVehicleDao ..|> VehicleDao
-PostgresDiscountDao ..|> DiscountDao
-PostgresRentalDao ..|> RentalDao
-PostgresTestDriveDao ..|> TestDriveDao
-PostgresSaleOrderDao ..|> SaleOrderDao
-PostgresPurchaseProposalDao ..|> PurchaseProposalDao
-PostgresPaymentDao ..|> PaymentDao
-PostgresStockOrderDao ..|> StockOrderDao
-
-PostgresUnitOfWork *-- PostgresUserDao
-PostgresUnitOfWork *-- PostgresBrandDao
-PostgresUnitOfWork *-- PostgresVehicleModelDao
-PostgresUnitOfWork *-- PostgresVehicleDao
-PostgresUnitOfWork *-- PostgresDiscountDao
-PostgresUnitOfWork *-- PostgresRentalDao
-PostgresUnitOfWork *-- PostgresTestDriveDao
-PostgresUnitOfWork *-- PostgresSaleOrderDao
-PostgresUnitOfWork *-- PostgresPurchaseProposalDao
-PostgresUnitOfWork *-- PostgresPaymentDao
-PostgresUnitOfWork *-- PostgresStockOrderDao
-PostgresUnitOfWork --> JdbcEntityLoader
+PostgresDaoFactory ..> PostgresUnitOfWork : «creates»
+PostgresUnitOfWork --> Connection : connection
+PostgresUnitOfWork ..> JdbcEntityLoader : «creates»
+PostgresUnitOfWork ..> PostgresVehicleDao : «creates»
+PostgresVehicleDao --> JdbcEntityLoader : loader ereditato
+PostgresVehicleDao --> Connection : connection ereditata
+UnitOfWork ..> VehicleDao : «uses» ritorno
+UnitOfWork ..> RentalDao : «uses» ritorno
+UnitOfWork ..> PaymentDao : «uses» ritorno
+note bottom of UnitOfWork
+  Undici porte DAO: anche User, Brand,
+  VehicleModel, Discount, TestDrive,
+  SaleOrder, PurchaseProposal, StockOrder.
+  close senza commit implica rollback.
+end note
 @enduml

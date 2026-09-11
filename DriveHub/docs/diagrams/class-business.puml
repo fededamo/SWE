@@ -1,144 +1,45 @@
 @startuml
 !pragma layout smetana
-title DriveHub — Classi business
-skinparam classAttributeIconSize 0
 skinparam shadowing false
-
-package "business.core" {
-  class TransactionRunner {
-    - daoFactory: DaoFactory
-    + execute(work): T
-  }
-
-  interface PaymentGateway {
-    + charge(amount: BigDecimal, method: PaymentMethod): PaymentGatewayResult
-  }
-
-  class PaymentGatewayResult {
-    + approved: boolean
-    + processorReference: String
-    + rejectionReason: String
-  }
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 17
+skinparam classAttributeIconSize 0
+skinparam dpi 150
+title Business — Checkout e confine transazionale
+class CheckoutService {
+ + checkoutRental(customerId: long, vehicleId: long, start: LocalDate, end: LocalDate, method: PaymentMethod, expectedAmount: BigDecimal): Payment
+ + checkoutSale(customerId: long, vehicleId: long, fullPurchase: boolean, method: PaymentMethod, expectedAmount: BigDecimal, pricingDate: LocalDate): Payment
 }
-
-package "business.security" {
-  interface PasswordHasher {
-    + hash(password: char[]): String
-    + matches(password: char[], hash: String): boolean
-  }
-
-  class Pbkdf2PasswordHasher
+class RentalService
+class SalesService
+class PaymentService {
+ + payRental(customerId: long, rentalId: long, method: PaymentMethod): Payment
+ + paySaleOrder(customerId: long, orderId: long, purpose: PaymentPurpose, method: PaymentMethod, amount: BigDecimal): Payment
+ + paymentsFor(customerId: long, referenceType: PaymentReferenceType, referenceId: long): List<Payment>
 }
-
-package "business.strategies" {
-  interface PricingStrategy {
-    + salePrice(vehicle: Vehicle, discounts: List, date: LocalDate): BigDecimal
-    + rentalPrice(vehicle: Vehicle, days: long, discounts: List, date: LocalDate): BigDecimal
-  }
-
-  class StandardPricingStrategy
+class TransactionRunner {
+ - daoFactory: DaoFactory
+ + <T> execute(work: Function<UnitOfWork,T>): T
 }
-
-package "business.services" {
-  class AuthService {
-    + register(request: RegistrationRequest, password: char[]): User
-    + login(email: String, password: char[]): User
-  }
-
-  class CatalogService {
-    + availableForSale(): List
-    + availableForRental(): List
-    + vehicle(vehicleId: long): Vehicle
-    + brands(): List
-    + models(): List
-  }
-
-  class RentalService {
-    + requestRental(customerId: long, vehicleId: long, startsOn: LocalDate, endsOn: LocalDate): Rental
-    + claimRental(rentalId: long, salesmanId: long): Rental
-    + confirmRental(rentalId: long, salesmanId: long): Rental
-    + startRental(rentalId: long, salesmanId: long): Rental
-    + completeRental(rentalId: long, salesmanId: long): Rental
-    + cancelRental(rentalId: long, actorId: long): Rental
-  }
-
-  class TestDriveService {
-    + book(customerId: long, vehicleId: long, at: LocalDateTime, duration: Duration): TestDrive
-    + confirm(testDriveId: long, salesmanId: long): TestDrive
-    + start(testDriveId: long, salesmanId: long): TestDrive
-    + complete(testDriveId: long, salesmanId: long): TestDrive
-    + cancel(testDriveId: long, actorId: long): TestDrive
-  }
-
-  class SalesService {
-    + reserveVehicle(customerId: long, vehicleId: long, deposit: BigDecimal, date: LocalDate): SaleOrder
-    + claimOrder(orderId: long, salesmanId: long): SaleOrder
-    + completeOrder(orderId: long, salesmanId: long): SaleOrder
-    + cancelOrder(orderId: long, actorId: long): SaleOrder
-  }
-
-  class PurchaseProposalService {
-    + request(customerId: long, modelId: long, plate: String, mileage: long, amount: BigDecimal, notes: String): PurchaseProposal
-    + submitOffer(proposalId: long, salesmanId: long, amount: BigDecimal, terms: String): PurchaseProposal
-    + approve(proposalId: long, managerId: long, reason: String): PurchaseProposal
-    + reject(proposalId: long, managerId: long, reason: String): PurchaseProposal
-  }
-
-  class InventoryService {
-    + addBrand(salesmanId: long, name: String): Brand
-    + addModel(salesmanId: long, brandId: long, code: String, name: String, year: int): VehicleModel
-    + addVehicle(salesmanId: long, modelId: long, plate: String, purpose: VehiclePurpose, salePrice: BigDecimal, rate: BigDecimal, mileage: long): Vehicle
-    + placeStockOrder(managerId: long, modelId: long, quantity: int, unitCost: BigDecimal): StockOrder
-    + sendToMaintenance(salesmanId: long, vehicleId: long): Vehicle
-    + returnFromMaintenance(salesmanId: long, vehicleId: long): Vehicle
-  }
-
-  class PricingService {
-    + quoteSale(vehicleId: long, date: LocalDate): BigDecimal
-    + quoteRental(vehicleId: long, days: long, date: LocalDate): BigDecimal
-    + applyDiscount(managerId: long, name: String, vehicleId: long, percentage: BigDecimal, startsOn: LocalDate, endsOn: LocalDate): Discount
-    + removeDiscount(managerId: long, discountId: long): void
-  }
-
-  class DashboardService {
-    + snapshot(managerId: long): DashboardSnapshot
-  }
-
-  class PaymentService {
-    + payRental(customerId: long, rentalId: long, method: PaymentMethod): Payment
-    + paySaleOrder(customerId: long, orderId: long, purpose: PaymentPurpose, method: PaymentMethod, amount: BigDecimal): Payment
-    + paymentsFor(type: PaymentReferenceType, referenceId: long): List
-  }
+interface DaoFactory {
+ + begin(): UnitOfWork
 }
-
-Pbkdf2PasswordHasher ..|> PasswordHasher
-StandardPricingStrategy ..|> PricingStrategy
-TransactionRunner --> DaoFactory
-
-AuthService --> TransactionRunner
-AuthService --> PasswordHasher
-CatalogService --> TransactionRunner
-RentalService --> TransactionRunner
-RentalService --> PricingStrategy
-TestDriveService --> TransactionRunner
-SalesService --> TransactionRunner
-SalesService --> PricingStrategy
-PurchaseProposalService --> TransactionRunner
-InventoryService --> TransactionRunner
-PricingService --> TransactionRunner
-PricingService --> PricingStrategy
-DashboardService --> TransactionRunner
-PaymentService --> TransactionRunner
-PaymentService --> PaymentGateway
-
-AuthService ..> User
-CatalogService ..> Vehicle
-RentalService ..> Rental
-TestDriveService ..> TestDrive
-SalesService ..> SaleOrder
-PurchaseProposalService ..> PurchaseProposal
-InventoryService ..> Vehicle
-InventoryService ..> StockOrder
-PricingService ..> Discount
-PaymentService ..> Payment
+interface PaymentGateway {
+ + charge(amount: BigDecimal, method: PaymentMethod): PaymentGatewayResult
+}
+interface PricingStrategy
+CheckoutService --> RentalService : rentals
+CheckoutService --> SalesService : sales
+CheckoutService --> PaymentService : payments
+CheckoutService --> TransactionRunner : transactions
+PaymentService --> TransactionRunner : transactions
+TransactionRunner --> DaoFactory : daoFactory
+PaymentService --> PaymentGateway : gateway
+RentalService --> PricingStrategy : pricing
+SalesService --> PricingStrategy : pricing
+note bottom of CheckoutService
+  I collaboratori espongono overload con UnitOfWork
+  a visibilità package (~): nessuna transazione annidata.
+  I metodi pubblici restano utilizzabili singolarmente.
+end note
 @enduml

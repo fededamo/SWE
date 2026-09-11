@@ -18,11 +18,11 @@ contenere SQL né ricostruire regole di business.
 
 | Elemento | Scelta | Fonte/stato |
 |---|---|---|
-| Linguaggio | Java 21 | `pom.xml`, verificato staticamente |
-| UI | JavaFX 21/FXML/CSS | `pom.xml` e risorse, verificato staticamente |
-| Build/test | Maven, JUnit 5, Mockito, JaCoCo | `pom.xml`, verificato staticamente |
-| Database | PostgreSQL 16, JDBC | Compose, configurazione e migration, da provare in esecuzione |
-| Test DB | H2 disponibile per i test | `pom.xml`; compatibilità SQL da verificare |
+| Linguaggio | Java 21 | compile, 81 test e package su Temurin 21.0.9 |
+| UI | JavaFX 21/FXML/CSS | otto smoke reali sotto Xvfb, incluso percorso PostgreSQL |
+| Build/test | Maven, JUnit 5, Mockito, JaCoCo | full-stack 109/109; JaCoCo 0.8.14 generato |
+| Database | PostgreSQL 16, JDBC | verificato su PostgreSQL 16.15 effimero |
+| Test DB | H2 per la suite rapida | doppio di test, non prova equivalente a PostgreSQL |
 | Configurazione | variabili d'ambiente e `.env.example` | verificato staticamente |
 
 Le note del corso non impongono queste versioni: sono decisioni del progetto.
@@ -53,8 +53,8 @@ Le note del corso non impongono queste versioni: sono decisioni del progetto.
 - **Factory/Composition Root:** la configurazione crea DAO, servizi e gateway
   una volta e li rende disponibili ai controller.
 - **Observer:** gli eventi di inventario disaccoppiano variazioni del veicolo
-  da reazioni secondarie; la sua utilità deve essere dimostrata da almeno un
-  caso e non solo dalla presenza delle interfacce.
+  da `InventoryActivityFeed`; pubblicazione after-commit, rollback senza evento
+  e unsubscribe sono coperti da test.
 - **Gateway simulato:** il pagamento universitario emula successo/fallimento e
   non raccoglie dati finanziari reali.
 
@@ -69,7 +69,7 @@ fisici possono variare solo mantenendo questa semantica.
 | `brands` | id, name | nome unico |
 | `vehicle_models` | id, brand_id, name, model_year | FK brand; identità modello unica |
 | `vehicles` | id, plate, model_id, purpose, sale_price, daily_rental_rate, mileage, status, created_at | targa unica; prezzo pertinente al purpose; valori non negativi |
-| `discounts` | id, name, vehicle_id, percentage, starts_on, ends_on, enabled | `0 < percentage ≤ 100`; periodo valido; più record non si cumulano |
+| `discounts` | id, name, vehicle_id, percentage, starts_on, ends_on, enabled | un record per veicolo; `0 < percentage < 100`; periodo valido |
 | `rentals` | id, customer_id, salesman_id?, vehicle_id, starts_on, ends_on, total_price, status, timestamps | periodo e prezzo validi; assegnazione coerente con stato |
 | `test_drives` | id, customer_id, salesman_id?, vehicle_id, scheduled_at, ends_at, status, created_at | slot unico per veicolo e Customer; `scheduled_at < ends_at`, durata massima quattro ore |
 | `sale_orders` | id, customer_id, salesman_id?, vehicle_id, total_price, required_deposit, paid_amount, status, timestamps | importi validi; FK Customer/Salesman/Vehicle |
@@ -100,22 +100,23 @@ fisici possono variare solo mantenendo questa semantica.
 | Payment | `PENDING → COMPLETED` oppure `FAILED` |
 | StockOrder | `PLACED → CONFIRMED → RECEIVED`; cancellazione prima della ricezione |
 
-Le migration SQL devono usare gli stessi literal degli enum. Questo controllo è
-parte della checklist finale perché una versione intermedia dello schema usava
-nomi precedenti (`SUBMITTED`, `PURCHASED`, ecc.).
+Le migration SQL usano gli stessi literal degli enum. Il confronto automatico
+su undici enum e i CHECK del server PostgreSQL 16.15 è incluso in
+`Postgres16ConstraintsTest`.
 
 ## 7. Transazioni, concorrenza e query
 
 Sono confini transazionali minimi: registrazione; conferma atomica di
 TestDrive/Rental; pagamento più aggiornamento dell'operazione; revisione di una
-proposta; creazione coordinata di modello e ordine stock. L'errore deve causare
-rollback o una compensazione verificabile e non una conferma parziale.
+proposta; creazione coordinata di modello e ordine stock. L'errore causa
+rollback della `UnitOfWork` e non una conferma parziale.
 
-Nella baseline statica esaminata, `ServiceUiGateway` crea Rental/SaleOrder,
-invoca il pagamento in una seconda transazione e cancella l'operazione in una
-terza se il pagamento è `FAILED`. Il comportamento è coerente a fine flusso, ma
-introduce una finestra di crash tra i passi. È un limite esplicito (`A-13`), non
-una atomicità distribuita dichiarata.
+`CheckoutService` crea Rental/SaleOrder, controlla il preventivo, registra il
+Payment e aggiorna gli stati nella stessa `TransactionRunner.execute`. Un
+rifiuto previsto viene conservato atomicamente come Payment `FAILED` e
+operazione `CANCELLED`; un'eccezione inattesa causa rollback completo. La scelta
+è corretta perché il gateway demo non produce effetti esterni. Un provider reale
+richiederebbe idempotenza e riconciliazione (`A-13`).
 
 Le query critiche riguardano: catalogo filtrato; sovrapposizioni di noleggio;
 slot test drive; prese in carico non assegnate; proposte `OFFERED`; dashboard.

@@ -20,7 +20,7 @@ class DatabaseBootstrapIntegrationTest extends PostgresDaoIntegrationSupport {
 
         bootstrap.initialize();
 
-        assertEquals(2, scalarLong("SELECT COUNT(*) FROM drivehub_schema_migrations"));
+        assertEquals(4, scalarLong("SELECT COUNT(*) FROM drivehub_schema_migrations"));
         assertEquals(12, scalarLong("""
                 SELECT COUNT(*)
                 FROM information_schema.tables

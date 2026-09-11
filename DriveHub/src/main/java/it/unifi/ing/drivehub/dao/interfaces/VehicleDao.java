@@ -10,6 +10,11 @@ public interface VehicleDao {
     Vehicle save(Vehicle vehicle);
     void update(Vehicle vehicle);
     Optional<Vehicle> findById(long id);
+
+    /** Locks the row until commit/rollback, then reads its current persisted state. */
+    Optional<Vehicle> findByIdForUpdate(long id);
+    /** Pending or ongoing rentals/test drives for operations that remove availability. */
+    boolean hasOpenBookings(long vehicleId);
     Optional<Vehicle> findByPlate(String normalizedPlate);
     List<Vehicle> findAll();
     List<Vehicle> findByModel(long modelId);

@@ -9,7 +9,7 @@ import javafx.stage.Stage;
 
 import java.math.BigDecimal;
 
-/** Controller kept reusable for a future external payment adapter; the demo is synchronous. */
+/** Collects explicit approval only; the caller submits the transaction after this dialog closes. */
 public final class PaymentDialogController {
     @FXML private Label amountLabel;
     @FXML private Label referenceLabel;
@@ -24,6 +24,11 @@ public final class PaymentDialogController {
     }
 
     public void configure(BigDecimal amount, String reference) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new IllegalArgumentException("L'importo deve essere positivo");
+        }
+        confirmed = false;
+        messageLabel.setText("");
         amountLabel.setText("€ " + amount.setScale(2, java.math.RoundingMode.HALF_UP));
         referenceLabel.setText(reference);
     }
@@ -38,7 +43,13 @@ public final class PaymentDialogController {
 
     @FXML
     private void confirm(javafx.event.ActionEvent event) {
+        if (confirmed) return;
+        if (methodCombo.getValue() == null) {
+            messageLabel.setText("Seleziona un metodo di pagamento");
+            return;
+        }
         confirmed = true;
+        ((Node) event.getSource()).setDisable(true);
         close(event);
     }
 

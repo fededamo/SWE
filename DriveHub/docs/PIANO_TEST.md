@@ -1,138 +1,122 @@
 # Piano di test
 
-## 1. Stato
+## 1. Obiettivo e criterio
 
-Il 23 agosto 2026 è stata eseguita offline la suite Maven finale disponibile:
-43 test, 0 failure, 0 error e 0 skipped, `BUILD SUCCESS` in 4,189 s. Ambiente:
-OpenJDK 25.0.4 con profilo Maven automatico `jdk-25-verification`; i test DAO
-usano H2 2.2.224 in `MODE=PostgreSQL`.
+Il piano verifica i requisiti dal punto di vista complementare di struttura,
+comportamento e persistenza. L'oracolo non è la sola assenza di eccezioni:
+ogni test controlla stato finale, scritture effettuate o negate, ownership e,
+nei flussi concorrenti, il numero dei vincitori. La coverage orienta la review
+ma non dimostra l'assenza di difetti.
 
-Non sono stati eseguiti un test contro un server PostgreSQL 16 live né una
-prova GUI interattiva. Il report JaCoCo è stato saltato perché JaCoCo 0.8.12 non
-strumenta i class file di JDK 25; la configurazione resta attiva su JDK 21.
+## 2. Livelli e tecniche
 
-## 2. Strategia
-
-| Livello | Scopo | Dipendenze |
+| Livello | Tecnica | Confine e oracolo |
 |---|---|---|
-| Unità dominio | invarianti, valori limite, transizioni | nessun DB/JavaFX |
-| Unità servizi | autorizzazione e orchestrazione | fake/mock DAO, clock e gateway |
-| Integrazione DAO | mapping, constraint, query, rollback | PostgreSQL di test preferito |
-| Funzionale | flussi base e alternative dei casi d'uso | applicazione e DB isolati |
-| UI/manuale | layout, navigazione, feedback e accessibilità di base | JavaFX grafico |
+| Dominio e servizi | white-box unit test | invarianti, rami, transizioni e autorizzazioni con fake/mock di porte, clock e gateway |
+| Funzionale | black-box attraverso API business | obiettivo dell'attore, flusso base e alternative osservando DTO/esito e stato persistito |
+| DAO/schema | gray-box integration | mapping, query, CHECK/FK/UNIQUE, CAS, lock e rollback sapendo come è organizzato lo schema |
+| Architettura/FXML | test strutturale e contract test | dipendenze ammesse, viste caricabili e handler esistenti |
+| JavaFX | smoke end-to-end su stage reali | routing, validazione, dialog, doppio click, feedback e composizione JavaFX→PostgreSQL |
+| Manuale | exploratory/UI | usabilità percepita, tastiera, accessibilità e ridimensionamento su desktop fisico |
 
-H2 può accelerare unit/integration test semplici, ma non sostituisce il test
-dei comportamenti PostgreSQL-specifici.
+H2 in modalità PostgreSQL è soltanto un doppio rapido. I comportamenti propri
+di PostgreSQL sono verificati anche sul server 16 reale e non sono dedotti dai
+test H2.
 
-## 3. Test funzionali pianificati
+## 3. Catalogo funzionale e test eseguibili
 
-Gli ID `FT-*` descrivono il catalogo di accettazione. Non vanno confusi con il
-numero dei metodi JUnit già eseguiti: la suite copre un sottoinsieme prioritario
-del catalogo tramite test di dominio, servizi, DAO, architettura e contratti UI.
+Gli ID sono condivisi con requisiti, template e matrice. La colonna evidenza
+indica il metodo o la classe che esercita effettivamente lo scenario.
 
-| ID | Scenario | Esito atteso |
+| ID | Scenario/oracolo principale | Evidenza JUnit |
 |---|---|---|
-| FT-AUTH-01 | registrazione valida | account e sessione creati; workspace del ruolo |
-| FT-AUTH-02 | CF/email duplicati o dati invalidi | nessun account parziale; errore correggibile |
-| FT-AUTH-03 | login valido per ciascun ruolo | routing a P-10/P-20/P-30 |
-| FT-AUTH-04 | credenziali errate/inattivo | accesso negato senza dettaglio sensibile |
-| FT-AUTH-05 | logout | sessione chiusa e P-00 |
-| FT-CAT-01 | filtri combinati | solo veicoli conformi |
-| FT-CAT-02 | nessun risultato/filtro invalido | stato vuoto o validazione chiara |
-| FT-TD-01 | prenotazione slot libero | TestDrive `REQUESTED` |
-| FT-TD-02 | slot passato o conflittuale | nessun duplicato |
-| FT-TD-03 | conferma, avvio, completamento | sequenza di stati valida |
-| FT-TD-04 | doppia presa in carico/stato illecito | secondo aggiornamento rifiutato |
-| FT-RENT-01 | noleggio valido e pagamento riuscito | Rental `REQUESTED`, Payment `COMPLETED` |
-| FT-RENT-02 | date errate o sovrapposizione | nessuna richiesta incoerente |
-| FT-RENT-03 | pagamento fallito | nessun esito completato |
-| FT-RENT-04 | annullamento dialog pagamento | ritorno alla pagina senza conferma |
-| FT-RENT-05 | elenco Customer | solo propri noleggi |
-| FT-RENT-06 | annullamento ammesso/non ammesso | stato coerente o rifiuto |
-| FT-RENT-07 | presa in carico e avanzamento | `ASSIGNED→CONFIRMED→ACTIVE→COMPLETED` |
-| FT-RENT-08 | noleggio di altro Salesman | modifica negata |
-| FT-SALE-01 | acconto | ordine `DEPOSIT_PAID`, pagamento completato |
-| FT-SALE-02 | saldo | ordine `PAID`, veicolo riservato |
-| FT-SALE-03 | veicolo concorrente/pagamento fallito | rollback o rifiuto senza doppia vendita |
-| FT-ACQ-01 | Customer propone veicolo | vehicle acquisition request e proposta `REQUESTED` |
-| FT-ACQ-02 | targa duplicata/dati invalidi | nessuna pratica parziale |
-| FT-ACQ-03 | Salesman formula offerta | proposta `OFFERED` |
-| FT-ACQ-04 | seconda offerta/stato non valido | rifiuto |
-| FT-ACQ-05 | Manager approva | proposta `APPROVED` con revisore/istante |
-| FT-ACQ-06 | Manager rifiuta o race | `REJECTED` oppure conflitto gestito |
-| FT-INV-01 | transizione inventario valida | stato aggiornato e notifica coerente |
-| FT-INV-02 | veicolo impegnato/transizione illecita | rifiuto |
-| FT-DASH-01 | dashboard su dataset noto | aggregati uguali agli expected del fixture |
-| FT-STOCK-01 | ordine valido | `PLACED` con totale corretto |
-| FT-STOCK-02 | quantità/costo non validi | nessun ordine |
-| FT-PRICE-01 | cambio prezzo/tariffa | solo campo pertinente aggiornato |
-| FT-PRICE-02 | sconto valido | una promozione attiva |
-| FT-PRICE-03 | percentuale/periodo invalidi | promozione precedente invariata |
-| FT-PAY-01 | successo simulato | Payment `COMPLETED` |
-| FT-PAY-02 | failure simulato | Payment `FAILED`; operazione non promossa |
-| FT-PAY-03 | secondo saldo dopo copertura dell'importo | richiesta rifiutata |
+| FT-AUTH-01/02 | account valido; duplicati e dati invalidi senza scritture parziali | `AuthServiceTest`; `UserGoalsFunctionalTest#ftAuth02DuplicatesAndInvalidData` |
+| FT-AUTH-03/04/05 | routing per ruolo; dinieghi indistinguibili; logout idempotente | `JavaFxSmokeTest#allRoutesLoadAndLogoutRemovesSession`; `UserGoalsFunctionalTest#ftAuth04LoginDenials`, `#ftAuth05SessionCleanup` |
+| FT-CAT-01/02 | filtri combinati, vuoto e input non valido | `UserGoalsFunctionalTest#ftCat01CombinedFilters`; `JavaFxSmokeTest#emptyCatalogAndInvalidSelectionShowMessages` |
+| FT-TD-01/02 | slot futuro libero; overlap/adiacenza e date errate | `UserGoalsFunctionalTest#ftTd01Slots`; `Postgres16ConstraintsTest#intervalCheckAndHalfOpenOverlapQuery` |
+| FT-TD-03/04 | claim e lifecycle esclusivi; ownership e annullamento | `UserGoalsFunctionalTest#ftTd03WorkflowAndOwnership`, `#ftTd04Cancellation`; `PostgresConcurrencyTest#claimAndDecisionCas` |
+| FT-RENT-01 | richiesta e pagamento approvato atomici | `CheckoutFunctionalTest#ftRent01AcceptedCheckout`; `JavaFxSmokeTest#confirmedRentalSubmitsOnceAndPreservesSuccess` |
+| FT-RENT-02 | periodo invalido/overlap rifiutato, adiacenza ammessa | `CheckoutFunctionalTest#ftRent02Periods`; `PostgresConcurrencyTest#overlappingRentalRequests` |
+| FT-RENT-03/04 | rifiuto registrato con pratica annullata; chiusura dialog senza scritture | `CheckoutFunctionalTest#ftRent03DeclinedCheckout`; `JavaFxSmokeTest#cancelledRentalAndReentrantClickNeverSubmit` |
+| FT-RENT-05/06/08 | vista proprietaria, cancellazione e diniego cross-user/staff | `CheckoutFunctionalTest#ftRent05OwnershipAndCancellation`, `#ftRent07StaffWorkflow` |
+| FT-RENT-07 | `ASSIGNED→CONFIRMED→ACTIVE→COMPLETED` e transizioni illegali | `CheckoutFunctionalTest#ftRent07StaffWorkflow`; `RentalWorkflowTest` |
+| FT-SALE-01/02 | acconto esatto, saldo esatto e acquisto integrale con purpose coerente | `CheckoutFunctionalTest#ftSale01DepositBalanceDelivery`, `#ftSale03FullPurchaseOnce`; `SalesWorkflowTest#depositAndBalance` |
+| FT-SALE-03 | rifiuto/race senza doppia vendita e rilascio del veicolo | `CheckoutFunctionalTest#ftSale03DeclinedDeposit`, `#ftSale03FullPurchaseOnce`; `PostgresConcurrencyTest#doubleSale` |
+| FT-ACQ-01/02 | proposta cliente e rollback anche del catalogo appena creato | `UserGoalsFunctionalTest#ftAcq01RequestAndRollback`; `PurchaseProposalServiceTest#requestCreatesMissingBrandAndModel` |
+| FT-ACQ-03..06 | offerta, approvazione/rifiuto, istante e decisione unica | `UserGoalsFunctionalTest#ftAcq03OfferAndBothDecisions`; `PurchaseProposalServiceTest#managerDecisionIsAtomic` |
+| FT-INV-01/02 | evento solo dopo commit; prenotazioni bloccano transizioni incompatibili | `UserGoalsFunctionalTest#ftInv01CommittedObserver`, `#ftInv02CommittedBookingsBlockAvailabilityChanges`; `TransactionAndObserverTest` |
+| FT-DASH-01/02 | aggregati noti, attività non inventate e ruolo corretto | `UserGoalsFunctionalTest#ftDash01KnownAggregates` |
+| FT-STOCK-01/02 | ordine/costruzione modello atomici; input errato in rollback | `UserGoalsFunctionalTest#ftStock01CreationAndRollback`; `SalesWorkflowTest#stockOrderWorkflow` |
+| FT-PRICE-01..03 | campo prezzo corretto; promozione sostituibile; invalidità in rollback | `UserGoalsFunctionalTest#ftPrice01PricingAndPromotion`; `PricingAndSecurityTest` |
+| FT-PAY-01/02 | successo e rifiuto con stati terminali coerenti | `CheckoutFunctionalTest`; `JavaFxSmokeTest#confirmedRentalSubmitsOnceAndPreservesSuccess`, `#rentalRejectionRemainsVisible` |
+| FT-PAY-03 | secondo addebito/saldo già coperto rifiutato | `CheckoutFunctionalTest#ftSale01DepositBalanceDelivery`, `#ftPay03DuplicateAndNonOwner`; `PostgresConcurrencyTest#doubleBalance` |
+| FT-PAY-04/05 | preventivo scaduto prima del gateway; errore inatteso in rollback | `CheckoutFunctionalTest#ftPay04StaleQuote`, `#ftPay05GatewayExceptionRollback` |
 
-## 4. Unità e integrazione prioritarie
+I nomi abbreviati della tabella sono leggibili integralmente negli XML
+Surefire conservati in `docs/evidence/full-stack/surefire-reports/`.
 
-- `UT-DOM-*`: costruttori, ruoli, prezzi/importi, date e ogni transizione.
-- `UT-AUTH-*`: normalizzazione email/CF, hashing e verifica, account inattivo.
-- `UT-RENT-*` e `UT-TD-*`: sovrapposizioni, ownership e stato inatteso.
-- `UT-SALES-*` e `UT-PAY-*`: sconto, acconto/saldo, idempotenza e rollback.
-- `IT-USER-01`: unicità e round-trip utente.
-- `IT-VEHICLE-*`: filtri, optimistic update e constraint dei prezzi.
-- `IT-TD-*`/`IT-RENT-*`: slot, date, assegnazione atomica e query ownership.
-- `IT-PROPOSAL-*`: coerenza attori/review e update condizionale.
-- `IT-PAY-*`: XOR del riferimento, coerenza purpose e atomicità con ordine/noleggio.
-- `IT-TX-01/02`: commit completo e rollback su eccezione deliberata.
+## 4. Persistenza, concorrenza e transazioni
 
-## 5. Ambiente ed esecuzione prevista
+Le prove PostgreSQL dedicate coprono:
 
-1. usare un database isolato e credenziali non di produzione;
-2. applicare le migration su database vuoto;
-3. eseguire `mvn clean test`;
-4. generare il report JaCoCo con `mvn jacoco:report` se configurato;
-5. eseguire i test PostgreSQL e poi i test UI manuali;
-6. salvare output, versione JDK/PostgreSQL, commit e data.
+- bootstrap da schema vuoto, cinque migration e seed idempotenti;
+- corrispondenza degli undici enum Java con i literal dei CHECK;
+- 22 foreign key, UNIQUE/CHECK, XOR dei riferimenti `Payment` e importi;
+- range/overlap, query di ownership e round-trip di tutti i workflow;
+- lock di riga, compare-and-set e indici unici parziali;
+- competizioni su vendita, saldo, pagamento noleggio, slot, claim e decisione;
+- rollback completo su errore SQL e su errore inatteso dopo il gateway simulato.
 
-Non è fissata una percentuale minima perché le note del corso non ne indicano
-una. La copertura è un indicatore: hanno priorità invarianti, alternative e
-transazioni rispetto a getter o codice puramente dichiarativo.
+`DatabaseBootstrapIntegrationTest` e `PostgresDaoIntegrationTest` usano H2 e
+rimangono test rapidi. `Postgres16ConstraintsTest`,
+`Postgres16DaoIntegrationTest` e `PostgresConcurrencyTest` richiedono il tag
+`postgres` e il container reale.
 
-## 6. Registro risultati
+## 5. Comandi riproducibili
 
-| Esecuzione | Data | Ambiente | Test | Failure/error/skipped | Esito/note |
-|---|---|---|---:|---:|---|
-| `mvn -o clean test` | 2026-08-23 | OpenJDK 25.0.4; profilo `jdk-25-verification`; H2 2.2.224 PostgreSQL mode | 43 | 0/0/0 | `BUILD SUCCESS`, 4,189 s |
-| PostgreSQL 16 live | non eseguito | server non disponibile nell'ambiente | — | — | resta verifica esterna |
-| prova GUI interattiva | non eseguita | ambiente grafico non disponibile | — | — | FXML verificati solo tramite contract test |
-| JaCoCo | saltato su JDK 25 | plugin 0.8.12 incompatibile col classfile JDK 25 | — | — | abilitato nel profilo JDK 21 |
+```bash
+mvn clean test
+bash scripts/test_postgres.sh
+bash scripts/test_full_stack.sh
+```
 
-### 6.1 Ripartizione della suite eseguita
+Il terzo comando costruisce un ambiente effimero con Temurin 21, Maven,
+PostgreSQL 16 e Xvfb/GTK, esegue anche i test `gui` e `postgres`, produce gli
+screenshot, archivia log/XML/JaCoCo e rimuove container e rete. Richiede Docker
+e accesso iniziale alle immagini/dependency. Nessuna credenziale di produzione
+è utilizzata.
 
-| Classe di test | Numero | Ambito |
-|---|---:|---|
-| `UserAndVehicleTest` | 6 | identità, ruoli, veicolo e invarianti |
-| `RentalWorkflowTest` | 4 | stati Rental/TestDrive |
-| `SalesWorkflowTest` | 4 | SaleOrder, Payment, PurchaseProposal, StockOrder |
-| `PricingAndSecurityTest` | 4 | strategia prezzo/sconto e PBKDF2 |
-| `AuthServiceTest` | 4 | registrazione/login e conflitti |
-| `RentalServiceTest` | 2 | richiesta e claim atomico |
-| `PaymentServiceTest` | 1 | pagamento noleggio e proprietà |
-| `PurchaseProposalServiceTest` | 2 | workflow offerta/decisione |
-| `DatabaseBootstrapIntegrationTest` | 4 | migration e bootstrap su H2 PostgreSQL mode |
-| `PostgresDaoIntegrationTest` | 5 | round-trip, query e CAS DAO |
-| `LayeringTest` | 3 | dipendenze architetturali |
-| `FxmlContractTest` | 2 | caricabilità/contratto delle viste |
-| `SessionContextTest` | 2 | apertura, accesso e chiusura sessione |
-| **Totale** | **43** | **0 failure, 0 error, 0 skipped** |
+## 6. Registro risultati dell'11 settembre 2026
+
+| Ambiente | Test | Failure / error / skipped | Esito |
+|---|---:|---:|---|
+| OpenJDK host 25.0.4.1, suite standard con target 21 | 81 | 0 / 0 / 0 | `BUILD SUCCESS` |
+| Temurin 21.0.9, suite standard | 81 | 0 / 0 / 0 | `BUILD SUCCESS` |
+| Temurin 21 + PostgreSQL 16.15 | 101 | 0 / 0 / 0 | `BUILD SUCCESS` |
+| Temurin 21 + Xvfb/GTK, 7 smoke JavaFX | 88 | 0 / 0 / 0 | `BUILD SUCCESS` |
+| full stack: Temurin 21 + PostgreSQL 16.15 + 8 smoke JavaFX | **109** | **0 / 0 / 0** | **`BUILD SUCCESS`, 29,062 s Maven** |
+
+Ripartizione full-stack: 6 architettura, 4 pricing/security, 4 auth service,
+1 payment service, 2 purchase proposal service, 2 rental service, 3
+transazione/Observer, 4 bootstrap H2, 7 constraint PostgreSQL, 5 DAO
+PostgreSQL reali, 5 DAO H2, 8 concorrenza PostgreSQL, 4 rental domain, 4 sales
+domain, 6 user/vehicle domain, 12 checkout funzionali, 20 user-goal
+funzionali, 2 contratti FXML, 8 smoke JavaFX e 2 session context.
+
+JaCoCo full-stack: 78,37% istruzioni, 62,74% branch, 80,77% linee, 80,49%
+metodi e 94,00% classi. I contatori completi e il fingerprint della baseline
+sono in `VERIFICA_FINALE.md` e `docs/evidence/full-stack/summary.json`.
 
 ## 7. Criteri di uscita
 
-- build pulita sulla configurazione JDK 25 documentata: soddisfatto;
-- nessun test disponibile fallito: soddisfatto (43/43);
-- almeno flusso base e alternative critiche di ogni UC significativo verificati;
-- migration applicabile da zero su H2 PostgreSQL mode: soddisfatto; su
-  PostgreSQL 16 live: non eseguito;
-- nessun segreto o dato personale reale nel repository/output;
-- matrice e registro aggiornati con classi di test ed esiti effettivi;
-- prova GUI interattiva e coverage JaCoCo su JDK 21 restano verifiche consigliate.
+- build e package su JDK 21 senza test falliti;
+- flusso base e alternative critiche di ogni UC significativo esercitati;
+- migration applicabili da zero e vincoli/query verificati su PostgreSQL 16;
+- transazioni e race critiche con oracolo esplicito;
+- viste FXML caricabili e percorso JavaFX reale fino a PostgreSQL;
+- diagrammi renderizzabili e ID coerenti tra requisiti, UC, matrice e test;
+- nessun segreto o dato personale reale nelle evidenze.
+
+I criteri tecnici risultano soddisfatti nella baseline identificata in
+`VERIFICA_FINALE.md`. Resta deliberatamente manuale la valutazione percettiva
+su desktop fisico (accessibilità, tastiera e dimensioni di monitor diverse).

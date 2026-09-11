@@ -5,6 +5,7 @@ import it.unifi.ing.drivehub.business.exceptions.ConflictException;
 import it.unifi.ing.drivehub.business.exceptions.EntityNotFoundException;
 import it.unifi.ing.drivehub.dao.interfaces.DaoFactory;
 import it.unifi.ing.drivehub.domain.observer.InventoryObserver;
+import it.unifi.ing.drivehub.domain.observer.InventoryEvent;
 import it.unifi.ing.drivehub.domain.users.Role;
 import it.unifi.ing.drivehub.domain.users.User;
 import it.unifi.ing.drivehub.domain.vehicles.Brand;
@@ -17,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -79,7 +81,6 @@ public final class InventoryService {
             }
             Vehicle vehicle = Vehicle.create(normalizedPlate, model, purpose,
                     salePrice, dailyRentalRate, mileage);
-            attachObservers(vehicle);
             return unit.vehicles().save(vehicle);
         });
     }
@@ -102,6 +103,16 @@ public final class InventoryService {
         });
     }
 
+    public StockOrder placeStockOrder(long managerId, String brand, String model, int year,
+                                      int quantity, BigDecimal unitCost) {
+        return transactions.execute(unit -> {
+            User manager = requireManager(unit.users().findById(managerId), managerId);
+            VehicleModel vehicleModel = CatalogModels.findOrCreate(unit, brand, model, year);
+            return unit.stockOrders().save(StockOrder.place(manager, vehicleModel, quantity, unitCost,
+                    LocalDate.now(clock)));
+        });
+    }
+
     public StockOrder confirmStockOrder(long managerId, long orderId) {
         return updateStockOrder(managerId, orderId, false);
     }
@@ -110,34 +121,54 @@ public final class InventoryService {
         return updateStockOrder(managerId, orderId, true);
     }
 
-    public List<Vehicle> inventory() {
-        return transactions.execute(unit -> List.copyOf(unit.vehicles().findAll()));
+    public List<Vehicle> inventory(long actorId) {
+        return transactions.execute(unit -> {
+            User actor = unit.users().findById(actorId).orElseThrow(() -> new EntityNotFoundException("user", actorId));
+            if (actor.role() == Role.MANAGER) actor.requireRole(Role.MANAGER);
+            else actor.requireRole(Role.SALESMAN);
+            return List.copyOf(unit.vehicles().findAll());
+        });
     }
 
-    public List<StockOrder> stockOrders() {
-        return transactions.execute(unit -> List.copyOf(unit.stockOrders().findAll()));
+    public List<StockOrder> stockOrders(long managerId) {
+        return transactions.execute(unit -> {
+            requireManager(unit.users().findById(managerId), managerId);
+            return List.copyOf(unit.stockOrders().findAll());
+        });
     }
 
     private Vehicle changeMaintenance(long salesmanId, long vehicleId, boolean start) {
-        return transactions.execute(unit -> {
+        List<InventoryEvent> committedEvents = new ArrayList<>();
+        Vehicle changed = transactions.execute(unit -> {
             requireSalesman(unit.users().findById(salesmanId), salesmanId);
-            Vehicle vehicle = unit.vehicles().findById(vehicleId)
+            Vehicle vehicle = unit.vehicles().findByIdForUpdate(vehicleId)
                     .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
-            attachObservers(vehicle);
-            if (start) {
-                vehicle.sendToMaintenance();
-            } else {
-                vehicle.returnFromMaintenance();
+            InventoryObserver collector = committedEvents::add;
+            vehicle.subscribe(collector);
+            try {
+                if (start) {
+                    if (unit.vehicles().hasOpenBookings(vehicleId)) {
+                        throw new ConflictException("Il veicolo ha prenotazioni aperte");
+                    }
+                    vehicle.sendToMaintenance();
+                } else {
+                    vehicle.returnFromMaintenance();
+                }
+            } finally {
+                vehicle.unsubscribe(collector);
             }
             unit.vehicles().update(vehicle);
             return vehicle;
         });
+        // A rolled-back write must never announce a state that was not persisted.
+        committedEvents.forEach(this::notifyObservers);
+        return changed;
     }
 
     private StockOrder updateStockOrder(long managerId, long orderId, boolean receive) {
         return transactions.execute(unit -> {
             User manager = requireManager(unit.users().findById(managerId), managerId);
-            StockOrder order = unit.stockOrders().findById(orderId)
+            StockOrder order = unit.stockOrders().findByIdForUpdate(orderId)
                     .orElseThrow(() -> new EntityNotFoundException("stock order", orderId));
             if (receive) {
                 order.receive(manager, LocalDate.now(clock));
@@ -149,8 +180,15 @@ public final class InventoryService {
         });
     }
 
-    private void attachObservers(Vehicle vehicle) {
-        observers.forEach(vehicle::subscribe);
+    private void notifyObservers(InventoryEvent event) {
+        for (InventoryObserver observer : observers) {
+            try {
+                observer.onInventoryEvent(event);
+            } catch (RuntimeException failure) {
+                System.getLogger(InventoryService.class.getName()).log(System.Logger.Level.WARNING,
+                        "Inventory observer failed after commit", failure);
+            }
+        }
     }
 
     private static User requireSalesman(java.util.Optional<User> value, long id) {

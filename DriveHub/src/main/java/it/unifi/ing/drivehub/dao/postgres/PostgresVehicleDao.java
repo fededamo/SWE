@@ -45,6 +45,22 @@ final class PostgresVehicleDao extends AbstractPostgresDao implements VehicleDao
     }
 
     @Override
+    public Optional<Vehicle> findByIdForUpdate(long id) {
+        return findOne("SELECT id FROM vehicles WHERE id = ? FOR UPDATE",
+                statement -> statement.setLong(1, id), loader::vehicle,
+                "Could not lock vehicles row");
+    }
+
+    @Override
+    public boolean hasOpenBookings(long vehicleId) {
+        return execute("Could not check vehicle commitments", () -> JdbcSupport.queryId(connection, """
+                SELECT id FROM rentals WHERE vehicle_id = ? AND status NOT IN ('CANCELLED', 'COMPLETED')
+                UNION ALL
+                SELECT id FROM test_drives WHERE vehicle_id = ? AND status NOT IN ('CANCELLED', 'COMPLETED')
+                """, statement -> { statement.setLong(1, vehicleId); statement.setLong(2, vehicleId); }).isPresent());
+    }
+
+    @Override
     public Optional<Vehicle> findByPlate(String normalizedPlate) {
         return findOne("SELECT id FROM vehicles WHERE plate = ?", statement ->
                 statement.setString(1, Vehicle.normalizePlate(normalizedPlate)), loader::vehicle,

@@ -1,126 +1,57 @@
 @startuml
 !pragma layout smetana
-title DriveHub — Classi presentation
-skinparam classAttributeIconSize 0
 skinparam shadowing false
-
-package "presentation.controller" {
-  abstract class AbstractController {
-    # context: ApplicationContext
-    # gateway(): UiGateway
-    # session(): UiModels.Session
-    + logout(): void
-  }
-
-  class WelcomeController
-  class LoginController
-  class RegistrationController
-  class CustomerWorkspaceController
-  class SalesmanWorkspaceController
-  class ManagerWorkspaceController
-
-  class PaymentDialogController {
-    - confirmed: boolean
-    + configure(amount: BigDecimal, reference: String): void
-    + isConfirmed(): boolean
-    + selectedMethod(): String
-  }
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 17
+skinparam classAttributeIconSize 0
+skinparam dpi 150
+title Presentation — Contesto, routing e dialogo
+class ApplicationContext {
+ - gateway: UiGateway
+ - session: SessionContext
+ + close(): void
 }
-
-package "presentation.core" {
-  interface ContextAware {
-    + setApplicationContext(context: ApplicationContext): void
-  }
-
-  class ApplicationContext {
-    - gateway: UiGateway
-    - session: SessionContext
-    + gateway(): UiGateway
-    + session(): SessionContext
-    + close(): void
-  }
-
-  class SessionContext {
-    - current: UiModels.Session
-    + open(session: UiModels.Session): void
-    + clear(): void
-    + current(): Optional
-    + requireCurrent(): UiModels.Session
-  }
-
-  interface UiGateway {
-    + login(email: String, password: char[]): UiModels.Session
-    + register(...): UiModels.Session
-    + searchCatalog(...): List
-    + rentAndPay(...): void
-    + reserveOrPurchase(...): void
-    + close(): void
-  }
-
-  class ServiceUiGateway {
-    - auth: AuthService
-    - catalog: CatalogService
-    - rentals: RentalService
-    - testDrives: TestDriveService
-    - sales: SalesService
-    - proposals: PurchaseProposalService
-    - pricing: PricingService
-    - inventory: InventoryService
-    - payments: PaymentService
-    - dashboards: DashboardService
-  }
-
-  class UiModels
+class SessionContext {
+ + open(session: Session): void
+ + clear(): void
+ + requireCurrent(): Session
 }
-
-package "presentation.navigation" {
-  class NavigationManager {
-    - stage: Stage
-    - context: ApplicationContext
-    + show(route: Route): void
-    + showHomeForCurrentRole(): void
-    + logout(): void
-  }
-
-  enum Route {
-    WELCOME
-    LOGIN
-    REGISTER
-    CUSTOMER
-    SALESMAN
-    MANAGER
-  }
+interface UiGateway
+class ServiceUiGateway
+class UiModelMapper
+abstract class AbstractController {
+ # context: ApplicationContext
 }
-
-ContextAware <|.. AbstractController
-AbstractController <|-- WelcomeController
-AbstractController <|-- LoginController
-AbstractController <|-- RegistrationController
+class CustomerWorkspaceController
+class SalesmanWorkspaceController
+class ManagerWorkspaceController
+class PaymentDialogController {
+ + configure(amount: BigDecimal, reference: String): void
+ + isConfirmed(): boolean
+ + selectedMethod(): String
+}
+class NavigationManager {
+ + show(route: Route): void
+ + showHomeForCurrentRole(): void
+ + logout(): void
+}
+ApplicationContext --> UiGateway : gateway
+ApplicationContext --> SessionContext : session
+ServiceUiGateway ..|> UiGateway
+ServiceUiGateway ..> UiModelMapper : «uses» mapping
+AbstractController --> ApplicationContext : context
 AbstractController <|-- CustomerWorkspaceController
 AbstractController <|-- SalesmanWorkspaceController
 AbstractController <|-- ManagerWorkspaceController
-
-AbstractController --> ApplicationContext
-AbstractController --> UiGateway
-AbstractController --> NavigationManager
-ApplicationContext *-- SessionContext
-ApplicationContext --> UiGateway
-ServiceUiGateway ..|> UiGateway
-UiGateway ..> UiModels
-SessionContext --> UiModels
-NavigationManager --> ApplicationContext
-NavigationManager --> Route
-
-LoginController --> NavigationManager
-RegistrationController --> NavigationManager
-ServiceUiGateway --> AuthService
-ServiceUiGateway --> CatalogService
-ServiceUiGateway --> RentalService
-ServiceUiGateway --> TestDriveService
-ServiceUiGateway --> SalesService
-ServiceUiGateway --> PurchaseProposalService
-ServiceUiGateway --> PricingService
-ServiceUiGateway --> InventoryService
-ServiceUiGateway --> PaymentService
-ServiceUiGateway --> DashboardService
+CustomerWorkspaceController ..> PaymentDialogController : «uses» configure / esito
+NavigationManager --> ApplicationContext : context
+interface ContextAware
+AbstractController ..|> ContextAware
+NavigationManager ..> ContextAware : «uses» iniezione contesto
+note bottom of PaymentDialogController
+  Il controller cliente carica il FXML.
+  Il dialogo raccoglie
+  conferma e metodo, non esegue pagamenti.
+  Il chiamante traduce annullamento in Optional.empty.
+end note
 @enduml

@@ -40,6 +40,11 @@ public final class SalesmanWorkspaceController extends AbstractController {
 
     @FXML
     private void initialize() {
+        testDriveTable.setPlaceholder(new Label("Nessun elemento disponibile"));
+        rentalTable.setPlaceholder(new Label("Nessun elemento disponibile"));
+        proposalTable.setPlaceholder(new Label("Nessun elemento disponibile"));
+        inventoryTable.setPlaceholder(new Label("Nessun elemento disponibile"));
+
         tdCodeColumn.setCellValueFactory(v -> property(v.getValue().code()));
         tdCustomerColumn.setCellValueFactory(v -> property(v.getValue().customer()));
         tdVehicleColumn.setCellValueFactory(v -> property(v.getValue().vehicle()));
@@ -79,8 +84,7 @@ public final class SalesmanWorkspaceController extends AbstractController {
                     gateway().manageableTestDrives(session().userId())));
             rentalTable.setItems(FXCollections.observableArrayList(gateway().manageableRentals(session().userId())));
             proposalTable.setItems(FXCollections.observableArrayList(gateway().proposalsForSalesman(session().userId())));
-            inventoryTable.setItems(FXCollections.observableArrayList(gateway().inventory()));
-            messageLabel.setText("");
+            inventoryTable.setItems(FXCollections.observableArrayList(gateway().inventory(session().userId())));
         } catch (RuntimeException exception) {
             showError(messageLabel, exception);
         }

@@ -3,8 +3,8 @@
 ## 1. Ambito e stato
 
 DriveHub è un prototipo desktop per Customer, Salesman e Manager. I passaggi
-seguenti descrivono il comportamento atteso dai sorgenti e devono essere
-ricontrollati con una prova end-to-end prima della consegna. Il pagamento è
+seguenti descrivono il comportamento implementato e coperto dai test
+end-to-end. Il pagamento è
 simulato: non inserire numeri di carta o dati reali.
 
 ## 2. Prerequisiti e avvio
@@ -13,18 +13,20 @@ simulato: non inserire numeri di carta o dati reali.
 - Docker/Compose per PostgreSQL 16, oppure un'istanza PostgreSQL equivalente;
 - variabili indicate in `.env.example`, copiate in un file locale non versionato.
 
-Procedura prevista:
+Procedura:
 
 1. dalla directory `DriveHub`, configurare URL, utente e password del database;
-2. avviare PostgreSQL con `docker compose up -d`;
+2. avviare PostgreSQL con `docker compose up -d` (il servizio usa
+   `compose.yaml` e l'immagine PostgreSQL 16);
 3. verificare che migration/seed siano applicati dalla procedura di bootstrap;
 4. avviare l'applicazione con `mvn javafx:run`;
 5. al termine chiudere l'applicazione e, se desiderato, il servizio con
    `docker compose down`.
 
-Comandi, nomi delle variabili e bootstrap vanno confermati sul repository
-finale. Non sono documentate credenziali demo finché non siano verificate nel
-seed definitivo.
+Il bootstrap applica le migration una sola volta. Il seed dimostrativo è
+facoltativo e contiene soltanto catalogo/account fittizi; non usare queste
+credenziali fuori da un ambiente locale. Per verificare automaticamente lo
+stack isolato usare `bash scripts/test_full_stack.sh`.
 
 ## 3. Accesso
 
@@ -84,8 +86,9 @@ l'email. “Logout” chiude la sessione e torna a Welcome.
 
 ## 7. Pagamento dimostrativo
 
-Il dialog mostra importo e riferimento, consente un metodo simulato e deve
-produrre uno dei tre esiti UI: successo, fallimento o annullamento. Il successo
+Il dialog P-40 è caricato da `PaymentDialog.fxml`, mostra importo e riferimento
+non sensibile e consente un metodo simulato. Produce tre esiti UI distinti:
+successo, fallimento o annullamento. Il successo
 porta Payment a `COMPLETED`; il fallimento a `FAILED`; la chiusura non deve
 essere comunicata come successo. Riprovare la stessa richiesta non deve
 creare un secondo saldo quando l'importo dovuto è già coperto.
@@ -103,3 +106,13 @@ creare un secondo saldo quando l'importo dovuto è già coperto.
 
 Gli stack trace completi sono materiale diagnostico e non devono comparire nei
 dialog destinati all'utente.
+
+## 9. Checklist manuale prima della presentazione
+
+- compilare nomi e matricole nel frontespizio della relazione;
+- avviare con JDK 21 e un database locale vuoto, quindi accedere con i tre ruoli;
+- provare tastiera, focus, ridimensionamento e leggibilità sul monitor d'esame;
+- eseguire un noleggio e una vendita mostrando conferma, annullamento e rifiuto;
+- illustrare il limite del gateway simulato senza inserire dati di pagamento;
+- rieseguire `bash scripts/test_full_stack.sh` se cambiano codice, SQL, FXML,
+  POM o Compose.

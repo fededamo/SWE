@@ -15,7 +15,9 @@ public final class DatabaseBootstrap {
 
     private static final List<String> MIGRATIONS = List.of(
             "db/migration/V001__create_drivehub_schema.sql",
-            "db/migration/V002__create_drivehub_indexes.sql"
+            "db/migration/V002__create_drivehub_indexes.sql",
+            "db/migration/V003__decision_audit_and_price_integrity.sql",
+            "db/migration/V004__domain_integrity.sql"
     );
     private static final String DEMO_SEED = "db/seed/demo-data.sql";
 
@@ -38,6 +40,11 @@ public final class DatabaseBootstrap {
             transactions.inTransaction((JdbcTransactionManager.SqlAction)
                     connection -> applyIfNeeded(connection, migration));
         }
+        transactions.inTransaction((JdbcTransactionManager.SqlAction) connection -> {
+            if (connection.getMetaData().getDatabaseProductName().equals("PostgreSQL")) {
+                applyIfNeeded(connection, "db/migration/V005__postgres_active_uniqueness.sql");
+            }
+        });
         if (seedDemoData) {
             transactions.inTransaction((JdbcTransactionManager.SqlAction)
                     connection -> SqlScriptRunner.run(connection, DEMO_SEED));

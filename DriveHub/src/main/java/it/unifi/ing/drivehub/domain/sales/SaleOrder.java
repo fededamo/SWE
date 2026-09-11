@@ -39,6 +39,14 @@ public final class SaleOrder extends BaseEntity {
         }
         this.status = Objects.requireNonNull(status, "status");
         this.salesman = salesman;
+        boolean validAmounts = switch (status) {
+            case RESERVED -> paidAmount.compareTo(requiredDeposit) < 0;
+            case DEPOSIT_PAID -> paidAmount.compareTo(requiredDeposit) >= 0 && paidAmount.compareTo(totalPrice) < 0;
+            case PAID -> paidAmount.compareTo(totalPrice) == 0;
+            case COMPLETED -> paidAmount.compareTo(totalPrice) == 0 && salesman != null;
+            case CANCELLED -> paidAmount.signum() == 0;
+        };
+        if (!validAmounts) throw new IllegalArgumentException("order payment state is inconsistent");
         if (salesman != null) {
             requireStoredRole(salesman, Role.SALESMAN, "salesman");
         }
@@ -46,9 +54,10 @@ public final class SaleOrder extends BaseEntity {
 
     public static SaleOrder reserve(User customer, Vehicle vehicle, BigDecimal totalPrice,
                                     BigDecimal requiredDeposit) {
-        vehicle.reserveForSale();
-        return new SaleOrder(null, customer, null, vehicle, totalPrice, requiredDeposit,
+        SaleOrder order = new SaleOrder(null, customer, null, vehicle, totalPrice, requiredDeposit,
                 BigDecimal.ZERO, SaleOrderStatus.RESERVED);
+        vehicle.reserveForSale();
+        return order;
     }
 
     public User customer() { return customer; }
@@ -98,10 +107,14 @@ public final class SaleOrder extends BaseEntity {
     }
 
     public void cancel(User actor) {
+        Objects.requireNonNull(actor, "actor").requireRole(actor.role());
         boolean customerActor = sameUser(customer, actor);
         boolean salesmanActor = salesman != null && sameUser(salesman, actor);
         if (!customerActor && !salesmanActor) {
             throw new DomainRuleViolationException("only customer or assigned salesman may cancel the order");
+        }
+        if (paidAmount.signum() > 0) {
+            throw new DomainRuleViolationException("a paid order cannot be cancelled without a refund workflow");
         }
         if (status == SaleOrderStatus.PAID || status == SaleOrderStatus.COMPLETED
                 || status == SaleOrderStatus.CANCELLED) {

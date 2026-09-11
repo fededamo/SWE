@@ -23,12 +23,21 @@ public final class PurchaseProposal extends BaseEntity {
     private String offerTerms;
     private User manager;
     private String decisionReason;
+    private Instant decidedAt;
     private PurchaseProposalStatus status;
 
     public PurchaseProposal(Long id, User customer, Vehicle vehicle, BigDecimal requestedAmount,
                             String customerNotes, Instant requestedAt, User salesman,
                             BigDecimal offeredAmount, String offerTerms, User manager,
                             String decisionReason, PurchaseProposalStatus status) {
+        this(id, customer, vehicle, requestedAmount, customerNotes, requestedAt, salesman,
+                offeredAmount, offerTerms, manager, decisionReason, status, null);
+    }
+
+    public PurchaseProposal(Long id, User customer, Vehicle vehicle, BigDecimal requestedAmount,
+                            String customerNotes, Instant requestedAt, User salesman,
+                            BigDecimal offeredAmount, String offerTerms, User manager,
+                            String decisionReason, PurchaseProposalStatus status, Instant decidedAt) {
         super(id);
         this.customer = Objects.requireNonNull(customer, "customer");
         requireStoredRole(customer, Role.CUSTOMER, "customer");
@@ -44,6 +53,7 @@ public final class PurchaseProposal extends BaseEntity {
         this.offerTerms = offerTerms;
         this.manager = manager;
         this.decisionReason = decisionReason;
+        this.decidedAt = decidedAt;
         this.status = Objects.requireNonNull(status, "status");
         validateState();
     }
@@ -64,6 +74,8 @@ public final class PurchaseProposal extends BaseEntity {
     public String offerTerms() { return offerTerms; }
     public User manager() { return manager; }
     public String decisionReason() { return decisionReason; }
+    /** Null means no decision or a legacy decision whose instant was not recorded. */
+    public Instant decidedAt() { return decidedAt; }
     public PurchaseProposalStatus status() { return status; }
 
     public void submitOffer(User candidate, BigDecimal amount, String terms) {
@@ -80,27 +92,44 @@ public final class PurchaseProposal extends BaseEntity {
     }
 
     public void approve(User decisionMaker, String reason) {
-        decide(decisionMaker, reason, PurchaseProposalStatus.APPROVED);
+        approve(decisionMaker, reason, Instant.now());
     }
 
     public void reject(User decisionMaker, String reason) {
-        decide(decisionMaker, reason, PurchaseProposalStatus.REJECTED);
+        reject(decisionMaker, reason, Instant.now());
     }
 
-    private void decide(User decisionMaker, String reason, PurchaseProposalStatus decision) {
+    public void approve(User decisionMaker, String reason, Instant decisionTime) {
+        decide(decisionMaker, reason, PurchaseProposalStatus.APPROVED, decisionTime);
+    }
+
+    public void reject(User decisionMaker, String reason, Instant decisionTime) {
+        decide(decisionMaker, reason, PurchaseProposalStatus.REJECTED, decisionTime);
+    }
+
+    private void decide(User decisionMaker, String reason, PurchaseProposalStatus decision, Instant decisionTime) {
         decisionMaker.requireRole(Role.MANAGER);
         if (status != PurchaseProposalStatus.OFFERED) {
             throw new DomainRuleViolationException("manager can decide only an offered proposal");
         }
         String validatedReason = requireText(reason, "decisionReason");
+        Objects.requireNonNull(decisionTime, "decisionTime");
+        if (decisionTime.isBefore(requestedAt)) {
+            throw new IllegalArgumentException("decision cannot precede the proposal request");
+        }
         manager = decisionMaker;
         decisionReason = validatedReason;
+        decidedAt = decisionTime;
         status = decision;
     }
 
     private void validateState() {
+        if (decidedAt != null && (decidedAt.isBefore(requestedAt)
+                || (status != PurchaseProposalStatus.APPROVED && status != PurchaseProposalStatus.REJECTED))) {
+            throw new IllegalArgumentException("decision instant requires a terminal proposal and follows the request");
+        }
         if (status == PurchaseProposalStatus.REQUESTED) {
-            if (salesman != null || offeredAmount != null || manager != null) {
+            if (salesman != null || offeredAmount != null || offerTerms != null || manager != null || decisionReason != null) {
                 throw new IllegalArgumentException("requested proposal cannot contain offer or decision data");
             }
             return;
@@ -110,12 +139,13 @@ public final class PurchaseProposal extends BaseEntity {
         }
         requireStoredRole(salesman, Role.SALESMAN, "salesman");
         positive(offeredAmount, "offeredAmount");
+        requireText(offerTerms, "offerTerms");
         if ((status == PurchaseProposalStatus.APPROVED || status == PurchaseProposalStatus.REJECTED)) {
             if (manager == null || decisionReason == null || decisionReason.isBlank()) {
                 throw new IllegalArgumentException("decided proposal requires manager and reason");
             }
             requireStoredRole(manager, Role.MANAGER, "manager");
-        } else if (manager != null) {
+        } else if (manager != null || decisionReason != null) {
             throw new IllegalArgumentException("offered proposal cannot contain a manager decision");
         }
     }

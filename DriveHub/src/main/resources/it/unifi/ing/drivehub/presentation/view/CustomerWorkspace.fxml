@@ -23,38 +23,38 @@
                 <tabs>
                     <Tab text="Catalogo veicoli">
                         <VBox styleClass="content">
-                            <HBox styleClass="toolbar">
+                            <FlowPane styleClass="toolbar" hgap="10" vgap="10">
                                 <TextField fx:id="catalogSearchField" promptText="Marca o modello" prefWidth="260"/>
-                                <ComboBox fx:id="vehicleTypeCombo" promptText="Vendita o noleggio" prefWidth="190"/>
+                                <ComboBox fx:id="vehicleTypeCombo" promptText="Vendita o noleggio" prefWidth="225"/>
                                 <TextField fx:id="maxPriceField" promptText="Prezzo massimo" prefWidth="150"/>
                                 <Button text="Cerca" onAction="#searchCatalog" styleClass="primary-button"/>
-                            </HBox>
+                            </FlowPane>
                             <TableView fx:id="catalogTable" VBox.vgrow="ALWAYS">
                                 <columns>
                                     <TableColumn fx:id="catalogPlateColumn" text="Targa" prefWidth="120"/>
-                                    <TableColumn fx:id="catalogModelColumn" text="Veicolo" prefWidth="240"/>
+                                    <TableColumn fx:id="catalogModelColumn" text="Veicolo" prefWidth="330"/>
                                     <TableColumn fx:id="catalogTypeColumn" text="Tipo" prefWidth="120"/>
                                     <TableColumn fx:id="catalogMileageColumn" text="Km" prefWidth="100"/>
                                     <TableColumn fx:id="catalogPriceColumn" text="Prezzo" prefWidth="150"/>
                                     <TableColumn fx:id="catalogStatusColumn" text="Stato" prefWidth="130"/>
                                 </columns>
                             </TableView>
-                            <HBox styleClass="toolbar">
+                            <FlowPane styleClass="toolbar" hgap="10" vgap="10">
                                 <Button text="Prenota test drive" onAction="#selectForTestDrive" styleClass="secondary-button"/>
                                 <Button text="Noleggia" onAction="#selectForRental" styleClass="primary-button"/>
                                 <Button text="Prenota / acquista" onAction="#selectForPurchase" styleClass="primary-button"/>
-                            </HBox>
+                            </FlowPane>
                         </VBox>
                     </Tab>
                     <Tab text="Test drive">
                         <VBox styleClass="content">
                             <Label text="Prenota un test drive" styleClass="section-title"/>
-                            <HBox styleClass="toolbar">
+                            <FlowPane styleClass="toolbar" hgap="10" vgap="10">
                                 <Label fx:id="testDriveVehicleLabel" text="Seleziona un veicolo dal catalogo" styleClass="muted"/>
                                 <DatePicker fx:id="testDriveDatePicker"/>
                                 <TextField fx:id="testDriveTimeField" promptText="HH:mm" prefWidth="90"/>
                                 <Button text="Prenota" onAction="#bookTestDrive" styleClass="primary-button"/>
-                            </HBox>
+                            </FlowPane>
                             <TableView fx:id="testDriveTable" VBox.vgrow="ALWAYS">
                                 <columns>
                                     <TableColumn fx:id="testDriveCodeColumn" text="Codice" prefWidth="130"/>
@@ -69,13 +69,14 @@
                         <VBox styleClass="content">
                             <Label text="Crea prenotazione di noleggio" styleClass="section-title"/>
                             <Label fx:id="rentalVehicleLabel" text="Seleziona un veicolo a noleggio dal catalogo" styleClass="muted"/>
-                            <HBox styleClass="toolbar">
+                            <FlowPane styleClass="toolbar" hgap="10" vgap="10">
                                 <Label text="Dal"/><DatePicker fx:id="rentalStartPicker"/>
-                                <Label text="al"/><DatePicker fx:id="rentalEndPicker"/>
+                                <Label text="al (escluso)"/><DatePicker fx:id="rentalEndPicker"/>
                                 <Button text="Calcola preventivo" onAction="#quoteRental" styleClass="secondary-button"/>
                                 <Label fx:id="rentalQuoteLabel" text="—" styleClass="section-title"/>
                                 <Button text="Conferma e paga" onAction="#rentAndPay" styleClass="primary-button"/>
-                            </HBox>
+                            </FlowPane>
+                            <Label text="Il pagamento è simulato. Un noleggio pagato non è annullabile: i rimborsi sono fuori scope." wrapText="true" styleClass="muted"/>
                             <Label fx:id="rentalMessageLabel" wrapText="true"/>
                         </VBox>
                     </Tab>

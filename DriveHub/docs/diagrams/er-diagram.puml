@@ -3,6 +3,8 @@
 title DriveHub — Modello entità-relazione
 hide methods
 skinparam shadowing false
+skinparam defaultFontSize 17
+skinparam dpi 150
 
 entity "users" as users {
   * id : BIGINT <<PK>>
@@ -51,7 +53,7 @@ entity "discounts" as discounts {
   * id : BIGINT <<PK>>
   --
   * name : VARCHAR(120)
-  * vehicle_id : BIGINT <<FK>>
+  * vehicle_id : BIGINT <<FK,UQ>>
   * percentage : NUMERIC(5,2)
   * starts_on : DATE
   * ends_on : DATE
@@ -126,6 +128,7 @@ entity "purchase_proposals" as purchase_proposals {
   offer_terms : VARCHAR(1000)
   manager_id : BIGINT <<FK>>
   decision_reason : VARCHAR(1000)
+  decided_at : TIMESTAMPTZ
   * status : VARCHAR(16)
 }
 
@@ -141,10 +144,10 @@ entity "stock_orders" as stock_orders {
   received_on : DATE
 }
 
-users ||--o{ users : manager supervises salesman
+users |o--o{ users : manager supervises salesman
 brands ||--o{ vehicle_models
 vehicle_models ||--o{ vehicles
-vehicles ||--o{ discounts
+vehicles ||--o| discounts
 users ||--o{ rentals : customer
 users |o--o{ rentals : salesman
 vehicles ||--o{ rentals
@@ -167,5 +170,18 @@ vehicle_models ||--o{ stock_orders
 note bottom of payments
   rental_id e sale_order_id sono protetti da CHECK XOR.
   purpose è coerente con il contesto scelto.
+end note
+note bottom of sale_orders
+  UNIQUE parziale vehicle_id WHERE status <> CANCELLED.
+  Un solo ordine vivo; stato coerente con paid_amount.
+end note
+note bottom of test_drives
+  Durata 15..240 minuti. UNIQUE parziali sugli slot vivi;
+  intervalli sovrapposti protetti dai lock applicativi.
+end note
+note bottom of vehicle_models
+  UNIQUE (brand_id, name, model_year).
+  Tabella tecnica drivehub_schema_migrations omessa:
+  version VARCHAR(200) PK, applied_at TIMESTAMPTZ NOT NULL.
 end note
 @enduml

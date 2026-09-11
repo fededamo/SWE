@@ -43,6 +43,13 @@ final class PostgresTestDriveDao extends AbstractPostgresDao implements TestDriv
     }
 
     @Override
+    public Optional<TestDrive> findByIdForUpdate(long id) {
+        return findOne("SELECT id FROM test_drives WHERE id = ? FOR UPDATE",
+                statement -> statement.setLong(1, id), loader::testDrive,
+                "Could not lock test_drives row");
+    }
+
+    @Override
     public List<TestDrive> findByCustomer(long customerId) {
         return findMany("SELECT id FROM test_drives WHERE customer_id = ? ORDER BY scheduled_at DESC, id",
                 statement -> statement.setLong(1, customerId), loader::testDrive,

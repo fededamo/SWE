@@ -4,6 +4,10 @@ import org.junit.jupiter.api.Test;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.lang.reflect.Method;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import javafx.fxml.FXML;
+import javafx.event.ActionEvent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
@@ -32,6 +36,19 @@ class FxmlContractTest {
                 Matcher controllerMatch = CONTROLLER.matcher(source);
                 assertTrue(controllerMatch.find(), () -> view + " has no fx:controller");
                 Class<?> controller = Class.forName(controllerMatch.group(1));
+                Set<String> ids = new HashSet<>();
+                Matcher idMatches = Pattern.compile("fx:id=\"([^\"]+)\"").matcher(source);
+                while (idMatches.find()) {
+                    assertTrue(ids.add(idMatches.group(1)), "Duplicate fx:id in " + view);
+                }
+                for (Class<?> type = controller; type != null; type = type.getSuperclass()) {
+                    for (Field field : type.getDeclaredFields()) {
+                        if (field.isAnnotationPresent(FXML.class)) {
+                            assertTrue(ids.contains(field.getName()),
+                                    () -> view + " does not inject @FXML field " + field.getName());
+                        }
+                    }
+                }
                 Set<String> methods = allMethodNames(controller);
                 Matcher handlers = HANDLER.matcher(source);
                 while (handlers.find()) {
@@ -52,7 +69,12 @@ class FxmlContractTest {
         Set<String> names = new HashSet<>();
         for (Class<?> current = type; current != null; current = current.getSuperclass()) {
             for (Method method : current.getDeclaredMethods()) {
-                names.add(method.getName());
+                if ((Modifier.isPublic(method.getModifiers()) || method.isAnnotationPresent(FXML.class))
+                        && (method.getParameterCount() == 0
+                        || (method.getParameterCount() == 1
+                        && method.getParameterTypes()[0].isAssignableFrom(ActionEvent.class)))) {
+                    names.add(method.getName());
+                }
             }
         }
         return names;

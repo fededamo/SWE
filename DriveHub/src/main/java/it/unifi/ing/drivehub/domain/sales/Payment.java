@@ -45,6 +45,12 @@ public final class Payment extends BaseEntity {
         this.status = Objects.requireNonNull(status, "status");
         this.processorReference = processorReference;
         this.failureReason = failureReason;
+        boolean validResult = switch (status) {
+            case PENDING -> processorReference == null && failureReason == null;
+            case COMPLETED -> processorReference != null && !processorReference.isBlank() && failureReason == null;
+            case FAILED -> processorReference == null && failureReason != null && !failureReason.isBlank();
+        };
+        if (!validResult) throw new IllegalArgumentException("payment result is inconsistent");
     }
 
     public static Payment start(User payer, PaymentReferenceType referenceType, long referenceId,

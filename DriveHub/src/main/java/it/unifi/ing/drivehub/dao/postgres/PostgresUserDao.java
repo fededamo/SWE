@@ -65,6 +65,13 @@ final class PostgresUserDao extends AbstractPostgresDao implements UserDao {
     }
 
     @Override
+    public Optional<User> findByIdForUpdate(long id) {
+        return findOne("SELECT id FROM users WHERE id = ? FOR UPDATE",
+                statement -> statement.setLong(1, id), loader::user,
+                "Could not lock user row");
+    }
+
+    @Override
     public Optional<User> findByEmail(String normalizedEmail) {
         return findOne("SELECT id FROM users WHERE email = ?", statement ->
                 statement.setString(1, User.normalizeEmail(normalizedEmail)), loader::user,

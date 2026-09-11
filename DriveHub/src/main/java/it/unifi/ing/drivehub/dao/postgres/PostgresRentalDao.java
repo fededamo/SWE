@@ -43,6 +43,13 @@ final class PostgresRentalDao extends AbstractPostgresDao implements RentalDao {
     }
 
     @Override
+    public Optional<Rental> findByIdForUpdate(long id) {
+        return findOne("SELECT id FROM rentals WHERE id = ? FOR UPDATE",
+                statement -> statement.setLong(1, id), loader::rental,
+                "Could not lock rentals row");
+    }
+
+    @Override
     public List<Rental> findAll() {
         return findMany("SELECT id FROM rentals ORDER BY starts_on DESC, id", statement -> { },
                 loader::rental, "Could not list rentals");

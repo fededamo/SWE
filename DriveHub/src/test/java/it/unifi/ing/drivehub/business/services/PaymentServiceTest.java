@@ -61,7 +61,7 @@ class PaymentServiceTest {
                 LocalDate.of(2027, 1, 4), new BigDecimal("300.00"));
         rental.assignId(50L);
         when(users.findById(1L)).thenReturn(Optional.of(TestFixtures.customer(1L)));
-        when(rentals.findById(50L)).thenReturn(Optional.of(rental));
+        when(rentals.findByIdForUpdate(50L)).thenReturn(Optional.of(rental));
         when(payments.findByReference(PaymentReferenceType.RENTAL, 50L)).thenReturn(List.of());
         when(payments.save(any())).thenAnswer(invocation -> {
             Payment payment = invocation.getArgument(0); payment.assignId(60L); return payment;

@@ -80,8 +80,9 @@ supportati dalle fonti.
 
 - **RB-01.** Email, codice fiscale, targa e codice modello sono univoci.
 - **RB-02.** I ruoli ammessi sono `CUSTOMER`, `SALESMAN`, `MANAGER`.
-- **RB-03.** Un Salesman è supervisionato da un solo Manager; un Manager può
-  supervisionare zero o più Salesman.
+- **RB-03.** Un Salesman può riferire al massimo un Manager nel prototipo; un
+  Manager può supervisionare zero o più Salesman. L'assegnazione è opzionale
+  perché `manager_id` è nullable e la registrazione pubblica non la raccoglie.
 - **RB-04.** Un Vehicle appartiene a un solo VehicleModel; un VehicleModel a un
   solo Brand. Brand e modello possono esistere senza veicoli in stock.
 - **RB-05.** Un Vehicle ha un solo tipo fra `RENTAL`, `FOR_SALE`,
@@ -100,9 +101,9 @@ supportati dalle fonti.
 - **RB-10.** Un Salesman consulta e modifica i noleggi che ha preso in carico.
   È un'assunzione da validare perché nel diagramma ER era formulata come
   domanda aperta.
-- **RB-11.** Un veicolo può avere più sconti storici o applicabili; la strategia
-  seleziona il maggiore e non li cumula. Ogni percentuale è in `(0,100]` e
-  l'intervallo temporale è coerente.
+- **RB-11.** La persistenza conserva al massimo uno sconto sostituibile per
+  veicolo. La Strategy, se riceve più candidati, seleziona il maggiore e non li
+  cumula. Ogni percentuale è in `(0,100)` e l'intervallo è coerente.
 - **RB-12.** Solo una proposta `OFFERED` può essere approvata o rifiutata;
   l'esito registra Manager e istante di revisione.
 - **RB-13.** Una proposta approvata non produce automaticamente un pagamento

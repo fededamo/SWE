@@ -5,6 +5,7 @@ import it.unifi.ing.drivehub.business.exceptions.ConflictException;
 import it.unifi.ing.drivehub.business.exceptions.EntityNotFoundException;
 import it.unifi.ing.drivehub.dao.interfaces.DaoFactory;
 import it.unifi.ing.drivehub.domain.rentals.TestDrive;
+import it.unifi.ing.drivehub.domain.rentals.TestDriveStatus;
 import it.unifi.ing.drivehub.domain.users.Role;
 import it.unifi.ing.drivehub.domain.users.User;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
@@ -32,10 +33,10 @@ public final class TestDriveService {
     /** UC-C-TEST: books a test drive, initially awaiting salesman confirmation. */
     public TestDrive book(long customerId, long vehicleId, LocalDateTime scheduledAt, Duration duration) {
         return transactions.execute(unit -> {
-            User customer = unit.users().findById(customerId)
+            User customer = unit.users().findByIdForUpdate(customerId)
                     .orElseThrow(() -> new EntityNotFoundException("customer", customerId));
             customer.requireRole(Role.CUSTOMER);
-            Vehicle vehicle = unit.vehicles().findById(vehicleId)
+            Vehicle vehicle = unit.vehicles().findByIdForUpdate(vehicleId)
                     .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
             if (!vehicle.isAvailableForSale()) {
                 throw new ConflictException("only an available sale vehicle can be test-driven");
@@ -44,6 +45,14 @@ public final class TestDriveService {
                 throw new IllegalArgumentException("test drive must be scheduled in the future");
             }
             LocalDateTime endsAt = scheduledAt.plus(duration);
+            boolean customerConflict = unit.testDrives().findByCustomer(customerId).stream()
+                    .filter(booking -> booking.status() != TestDriveStatus.CANCELLED
+                            && booking.status() != TestDriveStatus.COMPLETED)
+                    .anyMatch(booking -> booking.scheduledAt().isBefore(endsAt)
+                            && scheduledAt.isBefore(booking.endsAt()));
+            if (customerConflict) {
+                throw new ConflictException("customer already has a test drive in that time slot");
+            }
             if (unit.testDrives().existsOverlapping(vehicleId, scheduledAt, endsAt)) {
                 throw new ConflictException("vehicle already has a test drive in that time slot");
             }
@@ -66,7 +75,7 @@ public final class TestDriveService {
 
     public TestDrive start(long testDriveId, long salesmanId) {
         return transactions.execute(unit -> {
-            TestDrive booking = requireBooking(unit.testDrives().findById(testDriveId), testDriveId);
+            TestDrive booking = requireBooking(unit.testDrives().findByIdForUpdate(testDriveId), testDriveId);
             User salesman = requireUser(unit.users().findById(salesmanId), salesmanId);
             booking.start(salesman);
             booking.vehicle().startTestDrive();
@@ -81,7 +90,7 @@ public final class TestDriveService {
 
     public TestDrive complete(long testDriveId, long salesmanId) {
         return transactions.execute(unit -> {
-            TestDrive booking = requireBooking(unit.testDrives().findById(testDriveId), testDriveId);
+            TestDrive booking = requireBooking(unit.testDrives().findByIdForUpdate(testDriveId), testDriveId);
             User salesman = requireUser(unit.users().findById(salesmanId), salesmanId);
             booking.complete(salesman);
             booking.vehicle().finishTestDrive();
@@ -96,7 +105,7 @@ public final class TestDriveService {
 
     public TestDrive cancel(long testDriveId, long actorId) {
         return transactions.execute(unit -> {
-            TestDrive booking = requireBooking(unit.testDrives().findById(testDriveId), testDriveId);
+            TestDrive booking = requireBooking(unit.testDrives().findByIdForUpdate(testDriveId), testDriveId);
             User actor = requireUser(unit.users().findById(actorId), actorId);
             booking.cancel(actor);
             unit.testDrives().update(booking);
@@ -105,15 +114,24 @@ public final class TestDriveService {
     }
 
     public List<TestDrive> bookingsForCustomer(long customerId) {
-        return transactions.execute(unit -> List.copyOf(unit.testDrives().findByCustomer(customerId)));
+        return transactions.execute(unit -> {
+            requireUser(unit.users().findById(customerId), customerId).requireRole(Role.CUSTOMER);
+            return List.copyOf(unit.testDrives().findByCustomer(customerId));
+        });
     }
 
     public List<TestDrive> bookingsForSalesman(long salesmanId) {
-        return transactions.execute(unit -> List.copyOf(unit.testDrives().findBySalesman(salesmanId)));
+        return transactions.execute(unit -> {
+            requireUser(unit.users().findById(salesmanId), salesmanId).requireRole(Role.SALESMAN);
+            return List.copyOf(unit.testDrives().findBySalesman(salesmanId));
+        });
     }
 
-    public List<TestDrive> unassignedBookings() {
-        return transactions.execute(unit -> List.copyOf(unit.testDrives().findUnassigned()));
+    public List<TestDrive> unassignedBookings(long salesmanId) {
+        return transactions.execute(unit -> {
+            requireUser(unit.users().findById(salesmanId), salesmanId).requireRole(Role.SALESMAN);
+            return List.copyOf(unit.testDrives().findUnassigned());
+        });
     }
 
     /** Unassigned requests plus bookings already owned by this salesman. */

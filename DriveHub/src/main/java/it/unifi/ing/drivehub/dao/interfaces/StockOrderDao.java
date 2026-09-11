@@ -10,6 +10,7 @@ public interface StockOrderDao {
     StockOrder save(StockOrder order);
     void update(StockOrder order);
     Optional<StockOrder> findById(long id);
+    Optional<StockOrder> findByIdForUpdate(long id);
     List<StockOrder> findAll();
     List<StockOrder> findByStatus(StockOrderStatus status);
 }

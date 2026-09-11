@@ -21,9 +21,15 @@ import java.util.List;
 public final class DashboardService {
     private static final int RECENT_LIMIT = 10;
     private final TransactionRunner transactions;
+    private final InventoryActivityFeed inventoryActivity;
 
     public DashboardService(DaoFactory daoFactory) {
+        this(daoFactory, new InventoryActivityFeed());
+    }
+
+    public DashboardService(DaoFactory daoFactory, InventoryActivityFeed inventoryActivity) {
         this.transactions = new TransactionRunner(daoFactory);
+        this.inventoryActivity = java.util.Objects.requireNonNull(inventoryActivity);
     }
 
     public DashboardSnapshot snapshot(long managerId) {
@@ -43,12 +49,12 @@ public final class DashboardService {
             BigDecimal revenue = completed.stream().map(Payment::amount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            ArrayList<DashboardActivity> activity = new ArrayList<>();
+            ArrayList<DashboardActivity> activity = new ArrayList<>(inventoryActivity.recentActivity());
             completed.forEach(payment -> activity.add(new DashboardActivity(payment.createdAt(),
-                    "Payment " + payment.referenceType() + " #" + payment.referenceId()
-                            + " completed: " + payment.amount())));
+                    "Pagamento " + (payment.referenceType() == it.unifi.ing.drivehub.domain.sales.PaymentReferenceType.RENTAL ? "noleggio" : "vendita")
+                            + " #" + payment.referenceId() + " completato", payment.amount())));
             awaiting.forEach(proposal -> activity.add(new DashboardActivity(proposal.requestedAt(),
-                    "Purchase proposal #" + proposal.id() + " awaits a decision")));
+                    "Proposta #" + proposal.id() + " in attesa di decisione")));
             List<DashboardActivity> recent = activity.stream()
                     .sorted(Comparator.comparing(DashboardActivity::occurredAt).reversed())
                     .limit(RECENT_LIMIT)

@@ -47,10 +47,15 @@ public final class ManagerWorkspaceController extends AbstractController {
 
     @FXML
     private void initialize() {
+        activityTable.setPlaceholder(new Label("Nessun elemento disponibile"));
+        stockOrderTable.setPlaceholder(new Label("Nessun elemento disponibile"));
+        discountVehicleTable.setPlaceholder(new Label("Nessun elemento disponibile"));
+        approvalTable.setPlaceholder(new Label("Nessun elemento disponibile"));
+
         activityTypeColumn.setCellValueFactory(v -> property(v.getValue().type()));
         activityDescriptionColumn.setCellValueFactory(v -> property(v.getValue().description()));
         activityAmountColumn.setCellValueFactory(v -> property(money(v.getValue().amount())));
-        activityDateColumn.setCellValueFactory(v -> property(v.getValue().occurredAt()));
+        activityDateColumn.setCellValueFactory(v -> property(v.getValue().occurredAt().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))));
 
         orderCodeColumn.setCellValueFactory(v -> property(v.getValue().code()));
         orderModelColumn.setCellValueFactory(v -> property(v.getValue().model()));
@@ -87,10 +92,9 @@ public final class ManagerWorkspaceController extends AbstractController {
             pendingProposalsLabel.setText(String.valueOf(dashboard.pendingProposals()));
             activityTable.setItems(FXCollections.observableArrayList(
                     gateway().recentActivity(session().userId())));
-            stockOrderTable.setItems(FXCollections.observableArrayList(gateway().stockOrders()));
-            discountVehicleTable.setItems(FXCollections.observableArrayList(gateway().inventory()));
-            approvalTable.setItems(FXCollections.observableArrayList(gateway().proposalsAwaitingManager()));
-            messageLabel.setText("");
+            stockOrderTable.setItems(FXCollections.observableArrayList(gateway().stockOrders(session().userId())));
+            discountVehicleTable.setItems(FXCollections.observableArrayList(gateway().inventory(session().userId())));
+            approvalTable.setItems(FXCollections.observableArrayList(gateway().proposalsAwaitingManager(session().userId())));
         } catch (RuntimeException exception) {
             showError(messageLabel, exception);
         }

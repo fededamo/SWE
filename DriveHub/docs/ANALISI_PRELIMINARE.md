@@ -94,9 +94,10 @@ La destinazione separata è `../DriveHub`. La baseline tecnica verificata nel
 test e JaCoCo. `compose.yaml` prepara PostgreSQL 16 e `.env.example` contiene
 solo valori locali dimostrativi.
 
-Gli script SQL e le viste FXML eventualmente presenti costituiscono
-implementazione in evoluzione. Classi, metodi e risultati dei test restano da
-verificare al termine dello sviluppo.
+La baseline finale comprende cinque migration, viste FXML e servizi/adapter
+verificati. Il registro dell'11 settembre 2026 documenta 109 test full-stack senza
+failure/error/skipped su Temurin 21, PostgreSQL 16.15 e JavaFX sotto Xvfb; classi,
+metodi e fingerprint esatti sono in `VERIFICA_FINALE.md` e nelle evidenze.
 
 ## 3. Dominio ricostruito
 

@@ -9,6 +9,9 @@ public interface RentalDao {
     Rental save(Rental rental);
     void update(Rental rental);
     Optional<Rental> findById(long id);
+
+    /** Locks the row until commit/rollback, then reads its current persisted state. */
+    Optional<Rental> findByIdForUpdate(long id);
     List<Rental> findAll();
     List<Rental> findByCustomer(long customerId);
     List<Rental> findBySalesman(long salesmanId);

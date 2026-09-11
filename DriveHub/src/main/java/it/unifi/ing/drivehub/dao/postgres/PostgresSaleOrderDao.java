@@ -44,6 +44,13 @@ final class PostgresSaleOrderDao extends AbstractPostgresDao implements SaleOrde
     }
 
     @Override
+    public Optional<SaleOrder> findByIdForUpdate(long id) {
+        return findOne("SELECT id FROM sale_orders WHERE id = ? FOR UPDATE",
+                statement -> statement.setLong(1, id), loader::saleOrder,
+                "Could not lock sale_orders row");
+    }
+
+    @Override
     public List<SaleOrder> findByCustomer(long customerId) {
         return findMany("SELECT id FROM sale_orders WHERE customer_id = ? ORDER BY created_at DESC, id",
                 statement -> statement.setLong(1, customerId), loader::saleOrder,

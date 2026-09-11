@@ -7,6 +7,8 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.time.Instant;
+import java.util.Objects;
 import java.util.List;
 import java.util.Optional;
 
@@ -24,8 +26,8 @@ final class PostgresPurchaseProposalDao extends AbstractPostgresDao implements P
         long id = execute("Could not save purchase proposal", () -> JdbcSupport.insert(connection, """
                 INSERT INTO purchase_proposals(
                     customer_id, vehicle_id, requested_amount, customer_notes, requested_at,
-                    salesman_id, offered_amount, offer_terms, manager_id, decision_reason, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    salesman_id, offered_amount, offer_terms, manager_id, decision_reason, status, decided_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, statement -> bindProposal(statement, proposal, false)));
         proposal.assignId(id);
         return proposal;
@@ -37,7 +39,7 @@ final class PostgresPurchaseProposalDao extends AbstractPostgresDao implements P
                 UPDATE purchase_proposals
                 SET customer_id = ?, vehicle_id = ?, requested_amount = ?, customer_notes = ?, requested_at = ?,
                     salesman_id = ?, offered_amount = ?, offer_terms = ?, manager_id = ?, decision_reason = ?,
-                    status = ?
+                    status = ?, decided_at = ?
                 WHERE id = ?
                 """, statement -> bindProposal(statement, proposal, true)));
     }
@@ -104,14 +106,15 @@ final class PostgresPurchaseProposalDao extends AbstractPostgresDao implements P
 
     @Override
     public boolean decideIfOffered(
-            long proposalId, long managerId, boolean approved, String reason) {
+            long proposalId, long managerId, boolean approved, String reason, Instant decidedAt) {
+        Objects.requireNonNull(decidedAt, "decidedAt");
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("decision reason must not be blank");
         }
         String decision = approved ? "APPROVED" : "REJECTED";
         return execute("Could not atomically decide purchase proposal", () -> JdbcSupport.update(connection, """
                 UPDATE purchase_proposals
-                SET manager_id = ?, decision_reason = ?, status = ?
+                SET manager_id = ?, decision_reason = ?, status = ?, decided_at = ?
                 WHERE id = ? AND status = 'OFFERED' AND manager_id IS NULL
                   AND EXISTS (
                     SELECT 1 FROM users WHERE id = ? AND role = 'MANAGER' AND active = TRUE
@@ -120,8 +123,9 @@ final class PostgresPurchaseProposalDao extends AbstractPostgresDao implements P
             statement.setLong(1, managerId);
             statement.setString(2, reason.trim());
             statement.setString(3, decision);
-            statement.setLong(4, proposalId);
-            statement.setLong(5, managerId);
+            statement.setTimestamp(4, Timestamp.from(decidedAt));
+            statement.setLong(5, proposalId);
+            statement.setLong(6, managerId);
         }) == 1);
     }
 
@@ -145,8 +149,9 @@ final class PostgresPurchaseProposalDao extends AbstractPostgresDao implements P
                 proposal.manager() == null ? null : proposal.manager().requireId());
         statement.setString(10, proposal.decisionReason());
         statement.setString(11, proposal.status().name());
+        statement.setTimestamp(12, proposal.decidedAt() == null ? null : Timestamp.from(proposal.decidedAt()));
         if (includeId) {
-            statement.setLong(12, proposal.requireId());
+            statement.setLong(13, proposal.requireId());
         }
     }
 }

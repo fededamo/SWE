@@ -10,6 +10,9 @@ public interface TestDriveDao {
     TestDrive save(TestDrive testDrive);
     void update(TestDrive testDrive);
     Optional<TestDrive> findById(long id);
+
+    /** Locks the row until commit/rollback, then reads its current persisted state. */
+    Optional<TestDrive> findByIdForUpdate(long id);
     List<TestDrive> findByCustomer(long customerId);
     List<TestDrive> findBySalesman(long salesmanId);
     List<TestDrive> findUnassigned();

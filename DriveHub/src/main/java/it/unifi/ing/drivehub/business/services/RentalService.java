@@ -5,6 +5,7 @@ import it.unifi.ing.drivehub.business.exceptions.ConflictException;
 import it.unifi.ing.drivehub.business.exceptions.EntityNotFoundException;
 import it.unifi.ing.drivehub.business.strategies.PricingStrategy;
 import it.unifi.ing.drivehub.dao.interfaces.DaoFactory;
+import it.unifi.ing.drivehub.dao.interfaces.UnitOfWork;
 import it.unifi.ing.drivehub.domain.rentals.Rental;
 import it.unifi.ing.drivehub.domain.sales.PaymentReferenceType;
 import it.unifi.ing.drivehub.domain.sales.PaymentStatus;
@@ -30,23 +31,31 @@ public final class RentalService {
 
     /** UC-C-RENT: creates a customer request with no salesman owner. */
     public Rental requestRental(long customerId, long vehicleId, LocalDate startsOn, LocalDate endsOn) {
-        return transactions.execute(unit -> {
-            User customer = unit.users().findById(customerId)
-                    .orElseThrow(() -> new EntityNotFoundException("customer", customerId));
-            customer.requireRole(Role.CUSTOMER);
-            Vehicle vehicle = unit.vehicles().findById(vehicleId)
-                    .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
-            if (!vehicle.isAvailableForRental()) {
-                throw new ConflictException("vehicle is not available for rental");
-            }
-            if (hasOverlappingRental(unit.rentals().findAll(), vehicleId, startsOn, endsOn)) {
-                throw new ConflictException("vehicle already has a rental in the selected period");
-            }
-            long days = ChronoUnit.DAYS.between(startsOn, endsOn);
-            BigDecimal total = pricing.rentalPrice(vehicle, days,
-                    unit.discounts().findActiveOn(startsOn), startsOn);
-            return unit.rentals().save(Rental.request(customer, vehicle, startsOn, endsOn, total));
-        });
+        return transactions.execute(unit -> requestRental(unit, customerId, vehicleId, startsOn, endsOn));
+    }
+
+    Rental requestRental(UnitOfWork unit, long customerId, long vehicleId,
+                         LocalDate startsOn, LocalDate endsOn) {
+        Objects.requireNonNull(startsOn, "startsOn");
+        Objects.requireNonNull(endsOn, "endsOn");
+        if (!endsOn.isAfter(startsOn)) {
+            throw new IllegalArgumentException("rental end must be after its start");
+        }
+        User customer = unit.users().findById(customerId)
+                .orElseThrow(() -> new EntityNotFoundException("customer", customerId));
+        customer.requireRole(Role.CUSTOMER);
+        Vehicle vehicle = unit.vehicles().findByIdForUpdate(vehicleId)
+                .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
+        if (!vehicle.isAvailableForRental()) {
+            throw new ConflictException("vehicle is not available for rental");
+        }
+        if (hasOverlappingRental(unit.rentals().findAll(), vehicleId, startsOn, endsOn)) {
+            throw new ConflictException("vehicle already has a rental in the selected period");
+        }
+        long days = ChronoUnit.DAYS.between(startsOn, endsOn);
+        BigDecimal total = pricing.rentalPrice(vehicle, days,
+                unit.discounts().findActiveOn(startsOn), startsOn);
+        return unit.rentals().save(Rental.request(customer, vehicle, startsOn, endsOn, total));
     }
 
     /** UC-S-RENT: atomic first-claim wins; ownership is exclusive afterwards. */
@@ -65,7 +74,7 @@ public final class RentalService {
 
     public Rental confirmRental(long rentalId, long salesmanId) {
         return transactions.execute(unit -> {
-            Rental rental = requireRental(unit.rentals().findById(rentalId), rentalId);
+            Rental rental = requireRental(unit.rentals().findByIdForUpdate(rentalId), rentalId);
             User salesman = requireUser(unit.users().findById(salesmanId), "salesman", salesmanId);
             BigDecimal paid = unit.payments().findByReference(PaymentReferenceType.RENTAL, rentalId).stream()
                     .filter(payment -> payment.status() == PaymentStatus.COMPLETED)
@@ -82,7 +91,7 @@ public final class RentalService {
 
     public Rental startRental(long rentalId, long salesmanId) {
         return transactions.execute(unit -> {
-            Rental rental = requireRental(unit.rentals().findById(rentalId), rentalId);
+            Rental rental = requireRental(unit.rentals().findByIdForUpdate(rentalId), rentalId);
             User salesman = requireUser(unit.users().findById(salesmanId), "salesman", salesmanId);
             rental.start(salesman);
             rental.vehicle().startRental();
@@ -97,7 +106,7 @@ public final class RentalService {
 
     public Rental completeRental(long rentalId, long salesmanId) {
         return transactions.execute(unit -> {
-            Rental rental = requireRental(unit.rentals().findById(rentalId), rentalId);
+            Rental rental = requireRental(unit.rentals().findByIdForUpdate(rentalId), rentalId);
             User salesman = requireUser(unit.users().findById(salesmanId), "salesman", salesmanId);
             rental.complete(salesman);
             rental.vehicle().finishRental();
@@ -112,8 +121,13 @@ public final class RentalService {
 
     public Rental cancelRental(long rentalId, long actorId) {
         return transactions.execute(unit -> {
-            Rental rental = requireRental(unit.rentals().findById(rentalId), rentalId);
+            Rental rental = requireRental(unit.rentals().findByIdForUpdate(rentalId), rentalId);
             User actor = requireUser(unit.users().findById(actorId), "user", actorId);
+            boolean hasPayment = unit.payments().findByReference(PaymentReferenceType.RENTAL, rentalId).stream()
+                    .anyMatch(payment -> payment.status() == PaymentStatus.COMPLETED);
+            if (hasPayment) {
+                throw new ConflictException("Un noleggio pagato non è annullabile: il prototipo non gestisce rimborsi");
+            }
             rental.cancel(actor);
             unit.rentals().update(rental);
             return rental;
@@ -121,15 +135,24 @@ public final class RentalService {
     }
 
     public List<Rental> rentalsForCustomer(long customerId) {
-        return transactions.execute(unit -> List.copyOf(unit.rentals().findByCustomer(customerId)));
+        return transactions.execute(unit -> {
+            requireUser(unit.users().findById(customerId), "customer", customerId).requireRole(Role.CUSTOMER);
+            return List.copyOf(unit.rentals().findByCustomer(customerId));
+        });
     }
 
     public List<Rental> rentalsForSalesman(long salesmanId) {
-        return transactions.execute(unit -> List.copyOf(unit.rentals().findBySalesman(salesmanId)));
+        return transactions.execute(unit -> {
+            requireUser(unit.users().findById(salesmanId), "salesman", salesmanId).requireRole(Role.SALESMAN);
+            return List.copyOf(unit.rentals().findBySalesman(salesmanId));
+        });
     }
 
-    public List<Rental> unassignedRentals() {
-        return transactions.execute(unit -> List.copyOf(unit.rentals().findUnassigned()));
+    public List<Rental> unassignedRentals(long salesmanId) {
+        return transactions.execute(unit -> {
+            requireUser(unit.users().findById(salesmanId), "salesman", salesmanId).requireRole(Role.SALESMAN);
+            return List.copyOf(unit.rentals().findUnassigned());
+        });
     }
 
     private static boolean hasOverlappingRental(List<Rental> rentals, long vehicleId,

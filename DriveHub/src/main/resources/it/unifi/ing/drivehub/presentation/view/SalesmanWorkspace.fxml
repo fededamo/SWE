@@ -30,12 +30,12 @@
                                     <TableColumn fx:id="tdStatusColumn" text="Stato" prefWidth="130"/>
                                 </columns>
                             </TableView>
-                            <HBox styleClass="toolbar">
+                            <FlowPane styleClass="toolbar" hgap="10" vgap="10">
                                 <Button text="Conferma / prendi in carico" onAction="#confirmTestDrive" styleClass="secondary-button"/>
                                 <Button text="Avvia" onAction="#startTestDrive" styleClass="secondary-button"/>
                                 <Button text="Completa" onAction="#completeTestDrive" styleClass="primary-button"/>
                                 <Button text="Annulla" onAction="#cancelTestDrive" styleClass="danger-button"/>
-                            </HBox>
+                            </FlowPane>
                         </VBox>
                     </Tab>
                     <Tab text="Prenotazioni noleggio">
@@ -49,13 +49,13 @@
                                     <TableColumn fx:id="rentalStatusColumn" text="Stato" prefWidth="130"/>
                                 </columns>
                             </TableView>
-                            <HBox styleClass="toolbar">
+                            <FlowPane styleClass="toolbar" hgap="10" vgap="10">
                                 <Button text="Prendi in carico" onAction="#claimRental" styleClass="primary-button"/>
                                 <Button text="Conferma" onAction="#confirmRental" styleClass="secondary-button"/>
                                 <Button text="Avvia" onAction="#startRental" styleClass="secondary-button"/>
                                 <Button text="Completa" onAction="#completeRental" styleClass="secondary-button"/>
                                 <Button text="Annulla" onAction="#cancelRental" styleClass="danger-button"/>
-                            </HBox>
+                            </FlowPane>
                         </VBox>
                     </Tab>
                     <Tab text="Proposte di acquisto">
@@ -69,10 +69,10 @@
                                     <TableColumn fx:id="proposalStatusColumn" text="Stato" prefWidth="130"/>
                                 </columns>
                             </TableView>
-                            <HBox styleClass="toolbar">
+                            <FlowPane styleClass="toolbar" hgap="10" vgap="10">
                                 <TextField fx:id="offerAmountField" promptText="Importo offerto"/>
                                 <Button text="Crea e invia proposta" onAction="#submitProposal" styleClass="primary-button"/>
-                            </HBox>
+                            </FlowPane>
                         </VBox>
                     </Tab>
                     <Tab text="Inventario">
@@ -85,10 +85,10 @@
                                     <TableColumn fx:id="inventoryStatusColumn" text="Stato" prefWidth="150"/>
                                 </columns>
                             </TableView>
-                            <HBox styleClass="toolbar">
+                            <FlowPane styleClass="toolbar" hgap="10" vgap="10">
                                 <ComboBox fx:id="inventoryStatusCombo" promptText="Nuovo stato" prefWidth="180"/>
                                 <Button text="Aggiorna stato" onAction="#updateVehicleStatus" styleClass="primary-button"/>
-                            </HBox>
+                            </FlowPane>
                         </VBox>
                     </Tab>
                 </tabs>

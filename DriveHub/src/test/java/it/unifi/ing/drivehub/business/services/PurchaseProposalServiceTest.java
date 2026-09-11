@@ -85,7 +85,7 @@ class PurchaseProposalServiceTest {
     @DisplayName("UC-M-PROPOSAL-RACE: manager decision uses atomic OFFERED compare-and-set")
     void managerDecisionIsAtomic() {
         when(users.findById(3L)).thenReturn(Optional.of(TestFixtures.manager(3L)));
-        when(proposals.decideIfOffered(40L, 3L, true, "approved")).thenReturn(false);
+        when(proposals.decideIfOffered(eq(40L), eq(3L), eq(true), eq("approved"), any(Instant.class))).thenReturn(false);
 
         assertThrows(ConflictException.class, () -> service.approve(40L, 3L, "approved"));
 

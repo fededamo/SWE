@@ -23,7 +23,7 @@
                         <VBox styleClass="content">
                             <HBox spacing="15">
                                 <VBox styleClass="metric-card"><Label text="VEICOLI TOTALI" styleClass="muted"/><Label fx:id="totalVehiclesLabel" text="—" styleClass="metric-value"/></VBox>
-                                <VBox styleClass="metric-card"><Label text="NOLEGGI ATTIVI" styleClass="muted"/><Label fx:id="activeRentalsLabel" text="—" styleClass="metric-value"/></VBox>
+                                <VBox styleClass="metric-card"><Label text="NOLEGGI APERTI" styleClass="muted"/><Label fx:id="activeRentalsLabel" text="—" styleClass="metric-value"/></VBox>
                                 <VBox styleClass="metric-card"><Label text="INCASSI REGISTRATI" styleClass="muted"/><Label fx:id="revenueLabel" text="—" styleClass="metric-value"/></VBox>
                                 <VBox styleClass="metric-card"><Label text="PROPOSTE IN ATTESA" styleClass="muted"/><Label fx:id="pendingProposalsLabel" text="—" styleClass="metric-value"/></VBox>
                             </HBox>
@@ -74,13 +74,13 @@
                                     <TableColumn fx:id="discountValueColumn" text="Sconto" prefWidth="120"/>
                                 </columns>
                             </TableView>
-                            <HBox styleClass="toolbar">
+                            <FlowPane styleClass="toolbar" hgap="10" vgap="10">
                                 <TextField fx:id="newPriceField" promptText="Nuovo prezzo"/>
                                 <TextField fx:id="discountPercentField" promptText="Sconto %"/>
                                 <Button text="Aggiorna prezzo" onAction="#updatePrice" styleClass="secondary-button"/>
                                 <Button text="Applica sconto" onAction="#applyDiscount" styleClass="primary-button"/>
                                 <Button text="Rimuovi sconto" onAction="#removeDiscount" styleClass="danger-button"/>
-                            </HBox>
+                            </FlowPane>
                         </VBox>
                     </Tab>
                     <Tab text="Approvazione proposte">
@@ -94,10 +94,10 @@
                                     <TableColumn fx:id="approvalAmountColumn" text="Offerta" prefWidth="120"/>
                                 </columns>
                             </TableView>
-                            <HBox styleClass="toolbar">
+                            <FlowPane styleClass="toolbar" hgap="10" vgap="10">
                                 <Button text="Approva" onAction="#approveProposal" styleClass="primary-button"/>
                                 <Button text="Rifiuta" onAction="#rejectProposal" styleClass="danger-button"/>
-                            </HBox>
+                            </FlowPane>
                         </VBox>
                     </Tab>
                 </tabs>

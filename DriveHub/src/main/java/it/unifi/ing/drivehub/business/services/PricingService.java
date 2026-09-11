@@ -10,6 +10,7 @@ import it.unifi.ing.drivehub.domain.users.User;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
@@ -31,6 +32,21 @@ public final class PricingService {
         });
     }
 
+    /** Demonstration policy A-10: reserve with ten percent or pay the entire quote. */
+    public BigDecimal quoteSalePayment(long vehicleId, boolean fullPurchase, LocalDate date) {
+        BigDecimal total = quoteSale(vehicleId, date);
+        return fullPurchase ? total : requiredSaleDeposit(total);
+    }
+
+    public static BigDecimal requiredSaleDeposit(BigDecimal total) {
+        Objects.requireNonNull(total, "total");
+        if (total.signum() <= 0) {
+            throw new IllegalArgumentException("sale total must be positive");
+        }
+        return total.multiply(new BigDecimal("0.10")).setScale(2, RoundingMode.HALF_UP)
+                .max(new BigDecimal("0.01")).min(total);
+    }
+
     public BigDecimal quoteRental(long vehicleId, long days, LocalDate date) {
         return transactions.execute(unit -> {
             Vehicle vehicle = unit.vehicles().findById(vehicleId)
@@ -44,7 +60,7 @@ public final class PricingService {
         return transactions.execute(unit -> {
             requireManager(unit.users().findById(managerId)
                     .orElseThrow(() -> new EntityNotFoundException("manager", managerId)));
-            Vehicle vehicle = unit.vehicles().findById(vehicleId)
+            Vehicle vehicle = unit.vehicles().findByIdForUpdate(vehicleId)
                     .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
             Discount existing = unit.discounts().findAll().stream()
                     .filter(discount -> discount.vehicle().requireId() == vehicleId)
@@ -66,6 +82,8 @@ public final class PricingService {
                     .orElseThrow(() -> new EntityNotFoundException("manager", managerId)));
             Discount discount = unit.discounts().findById(discountId)
                     .orElseThrow(() -> new EntityNotFoundException("discount", discountId));
+            unit.vehicles().findByIdForUpdate(discount.vehicle().requireId()).orElseThrow();
+            discount = unit.discounts().findById(discountId).orElseThrow();
             discount.disable();
             unit.discounts().update(discount);
             return null;
@@ -89,7 +107,7 @@ public final class PricingService {
             User manager = unit.users().findById(managerId)
                     .orElseThrow(() -> new EntityNotFoundException("manager", managerId));
             requireManager(manager);
-            Vehicle vehicle = unit.vehicles().findById(vehicleId)
+            Vehicle vehicle = unit.vehicles().findByIdForUpdate(vehicleId)
                     .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
             if (sale) {
                 vehicle.updateSalePrice(manager, amount);

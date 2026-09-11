@@ -12,11 +12,12 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
         <javafx.version>21.0.2</javafx.version>
         <junit.version>5.10.1</junit.version>
-        <mockito.version>5.11.0</mockito.version>
+        <mockito.version>5.20.0</mockito.version>
+        <argLine></argLine>
+        <excludedTestGroups>postgres,gui</excludedTestGroups>
     </properties>
 
     <dependencies>
@@ -63,8 +64,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
                 <configuration>
-                    <source>${maven.compiler.source}</source>
-                    <target>${maven.compiler.target}</target>
+                    <release>${maven.compiler.release}</release>
                     <parameters>true</parameters>
                 </configuration>
             </plugin>
@@ -74,11 +74,9 @@
                 <version>3.2.5</version>
                 <configuration>
                     <useModulePath>false</useModulePath>
-                    <systemPropertyVariables>
-                        <!-- Mockito 5.11 bundles Byte Buddy before Java 25 support.
-                             Harmless on Java 21, required by the verification JDK. -->
-                        <net.bytebuddy.experimental>true</net.bytebuddy.experimental>
-                    </systemPropertyVariables>
+                    <!-- Premain avoids dynamic self-attachment; JaCoCo supplies the late argLine. -->
+                    <argLine>@{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
+                    <excludedGroups>${excludedTestGroups}</excludedGroups>
                 </configuration>
             </plugin>
             <plugin>
@@ -92,7 +90,7 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.12</version>
+                <version>0.8.14</version>
                 <executions>
                     <execution>
                         <goals>
@@ -113,14 +111,15 @@
 
     <profiles>
         <profile>
-            <id>jdk-25-verification</id>
-            <activation>
-                <jdk>[25,)</jdk>
-            </activation>
+            <id>postgres</id>
             <properties>
-                <!-- JaCoCo 0.8.12 targets the project's Java 21 runtime but cannot
-                     instrument Java 25 class files used by this build container. -->
-                <jacoco.skip>true</jacoco.skip>
+                <excludedTestGroups>gui</excludedTestGroups>
+            </properties>
+        </profile>
+        <profile>
+            <id>gui</id>
+            <properties>
+                <excludedTestGroups>postgres</excludedTestGroups>
             </properties>
         </profile>
     </profiles>

@@ -21,7 +21,7 @@ public interface UiGateway extends AutoCloseable {
 
     List<UiModels.VehicleItem> searchCatalog(String query, VehiclePurpose purpose, BigDecimal maxPrice);
 
-    List<UiModels.VehicleItem> inventory();
+    List<UiModels.VehicleItem> inventory(long actorId);
 
     List<UiModels.TestDriveItem> customerTestDrives(long customerId);
 
@@ -40,7 +40,7 @@ public interface UiGateway extends AutoCloseable {
     BigDecimal quoteRental(long vehicleId, LocalDate startDate, LocalDate endDate);
 
     void rentAndPay(long customerId, long vehicleId, LocalDate startDate, LocalDate endDate,
-                    String paymentMethod);
+                    String paymentMethod, BigDecimal expectedAmount);
 
     List<UiModels.RentalItem> customerRentals(long customerId);
 
@@ -56,8 +56,10 @@ public interface UiGateway extends AutoCloseable {
 
     void cancelRental(long actorId, Role actorRole, long rentalId);
 
+    BigDecimal quotePurchase(long vehicleId, boolean fullPurchase);
+
     void reserveOrPurchase(long customerId, long vehicleId, boolean fullPurchase,
-                           String paymentMethod);
+                           String paymentMethod, BigDecimal expectedAmount);
 
     void submitVehicleSale(long customerId, UiModels.VehicleSaleRequest request);
 
@@ -65,7 +67,7 @@ public interface UiGateway extends AutoCloseable {
 
     void submitPurchaseProposal(long salesmanId, long proposalId, BigDecimal offeredAmount);
 
-    List<UiModels.ProposalItem> proposalsAwaitingManager();
+    List<UiModels.ProposalItem> proposalsAwaitingManager(long managerId);
 
     void decidePurchaseProposal(long managerId, long proposalId, boolean approve);
 
@@ -79,7 +81,7 @@ public interface UiGateway extends AutoCloseable {
 
     void createStockOrder(long managerId, UiModels.StockOrderRequest request);
 
-    List<UiModels.StockOrderItem> stockOrders();
+    List<UiModels.StockOrderItem> stockOrders(long managerId);
 
     UiModels.Dashboard dashboard(long managerId);
 

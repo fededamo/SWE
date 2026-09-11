@@ -92,8 +92,8 @@ public final class Discount extends BaseEntity {
         }
         Objects.requireNonNull(newPercentage, "percentage");
         if (newPercentage.signum() <= 0
-                || newPercentage.compareTo(BigDecimal.valueOf(100)) > 0) {
-            throw new IllegalArgumentException("discount percentage must be in (0, 100]");
+                || newPercentage.compareTo(BigDecimal.valueOf(100)) >= 0) {
+            throw new IllegalArgumentException("discount percentage must be in (0, 100)");
         }
         Objects.requireNonNull(newStartsOn, "startsOn");
         Objects.requireNonNull(newEndsOn, "endsOn");

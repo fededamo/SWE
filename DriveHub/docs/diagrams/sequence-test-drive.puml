@@ -1,37 +1,47 @@
 @startuml
-title UC-TD-01/02 — Test drive
+!pragma layout smetana
+skinparam shadowing false
+skinparam defaultFontName SansSerif
+skinparam defaultFontSize 17
+skinparam classAttributeIconSize 0
+skinparam dpi 150
+title UC-TD-01 — Prenotazione e conflitti temporali
+skinparam maxMessageSize 55
 autonumber
 actor Customer
-actor Salesman
-boundary CustomerUI
-boundary SalesmanUI
-control TestDriveService
-database TestDriveDao
-
-Customer -> CustomerUI : veicolo + slot futuro
-CustomerUI -> TestDriveService : request(customer, vehicle, slot)
-TestDriveService -> TestDriveDao : checkSlot(customer, vehicle, slot)
-alt slot libero
-  TestDriveService -> TestDriveDao : save(REQUESTED)
-  TestDriveService --> CustomerUI : richiesta creata
-else conflitto
-  TestDriveService --> CustomerUI : slot non disponibile
+control "service : TestDriveService" as service
+participant "runner : TransactionRunner" as runner
+participant "factory : DaoFactory" as factory
+participant "unit : UnitOfWork" as unit
+participant "dao : TestDriveDao" as dao
+Customer -> service : book(customerId, vehicleId, scheduledAt, duration)\n[da P-11 tramite UiGateway]
+activate service
+service -> runner : execute(work)
+activate runner
+runner -> factory : begin()
+factory --> runner : unit
+note over service,runner : Il runner esegue il callback definito in book().
+service -> unit : users().findByIdForUpdate(customerId)
+service -> unit : vehicles().findByIdForUpdate(vehicleId)
+service -> dao : findByCustomer(customerId)
+dao --> service : prenotazioni
+service -> dao : existsOverlapping(vehicleId, scheduledAt, endsAt)
+dao --> service : conflitto veicolo?
+alt ruolo/stato/data non validi oppure sovrapposizione
+ note over service,runner : Il callback solleva un errore prima del salvataggio.
+ runner -> unit : rollback()
+else intervallo libero
+ service -> dao : save(TestDrive.request(customer, vehicle, scheduledAt, duration))
+ dao --> service : booking REQUESTED
+ runner -> unit : commit()
 end
-
-Salesman -> SalesmanUI : seleziona richiesta
-SalesmanUI -> TestDriveService : confirm(id, salesman)
-TestDriveService -> TestDriveDao : confirmIfRequestedAndUnassigned(...)
-alt conferma atomica riuscita
-  TestDriveDao --> TestDriveService : CONFIRMED
-  TestDriveService --> SalesmanUI : aggiornato
-  Salesman -> SalesmanUI : Avvia
-  SalesmanUI -> TestDriveService : start(id, salesman)
-  TestDriveService -> TestDriveDao : update(IN_PROGRESS)
-  Salesman -> SalesmanUI : Completa
-  SalesmanUI -> TestDriveService : complete(id, salesman)
-  TestDriveService -> TestDriveDao : update(COMPLETED)
-else già preso/stato cambiato
-  TestDriveDao --> TestDriveService : 0 righe
-  TestDriveService --> SalesmanUI : conflitto + refresh
-end
+runner -> unit : close()
+runner --> service : risultato oppure errore
+deactivate runner
+service --> Customer : richiesta oppure feedback correggibile
+deactivate service
+note over unit,dao
+  Lock cliente poi veicolo: serializza anche due slot
+  con inizi diversi su veicoli diversi per lo stesso cliente.
+end note
 @enduml

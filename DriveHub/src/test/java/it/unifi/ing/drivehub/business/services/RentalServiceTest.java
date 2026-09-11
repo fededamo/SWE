@@ -60,7 +60,7 @@ class RentalServiceTest {
         LocalDate start = LocalDate.of(2027, 2, 1);
         LocalDate end = start.plusDays(3);
         when(users.findById(1L)).thenReturn(Optional.of(customer));
-        when(vehicles.findById(30L)).thenReturn(Optional.of(vehicle));
+        when(vehicles.findByIdForUpdate(30L)).thenReturn(Optional.of(vehicle));
         when(rentals.findAll()).thenReturn(List.of());
         when(discounts.findActiveOn(start)).thenReturn(List.of());
         when(pricing.rentalPrice(eq(vehicle), eq(3L), anyList(), eq(start)))
