@@ -8,7 +8,9 @@ import java.util.Optional;
 public interface VehicleModelDao {
     VehicleModel save(VehicleModel model);
     Optional<VehicleModel> findById(long id);
-    Optional<VehicleModel> findByCode(String code);
-    List<VehicleModel> findByBrand(long brandId);
+    Optional<VehicleModel> findByName(String name);
+    List<VehicleModel> findByBrand(String brandName);
     List<VehicleModel> findAll();
+    void delete(long modelId);
+    boolean hasVehicles(long modelId);
 }

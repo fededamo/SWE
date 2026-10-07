@@ -8,16 +8,16 @@ import java.util.Optional;
 
 public interface TestDriveDao {
     TestDrive save(TestDrive testDrive);
-    void update(TestDrive testDrive);
     Optional<TestDrive> findById(long id);
-
-    /** Locks the row until commit/rollback, then reads its current persisted state. */
-    Optional<TestDrive> findByIdForUpdate(long id);
-    List<TestDrive> findByCustomer(long customerId);
-    List<TestDrive> findBySalesman(long salesmanId);
-    List<TestDrive> findUnassigned();
-    boolean existsOverlapping(long vehicleId, LocalDateTime startsAt, LocalDateTime endsAt);
-
-    /** Atomically confirms a REQUESTED/unassigned booking for one salesman. */
-    boolean confirmIfUnassigned(long testDriveId, long salesmanId);
+    List<TestDrive> findByClientId(long clientId);
+    List<TestDrive> findByVehicleId(long vehicleId);
+    List<TestDrive> findAll();
+    int countActiveByClientId(long clientId, LocalDateTime asOfDate);
+    boolean hasConflictingTestDrive(long vehicleId, LocalDateTime dateTime);
+    List<TestDrive> findFutureTestDrivesForVehicle(long vehicleId, LocalDateTime asOfDate);
+    void delete(long testDriveId);
+    void cancelFutureTestDrivesForVehicle(long vehicleId, LocalDateTime asOfDate);
+    void cancelTestDrivesInRange(long vehicleId, LocalDateTime from, LocalDateTime to);
+    boolean hasOperationsForVehicle(long vehicleId);
+    boolean hasOperationsForClient(long clientId);
 }

@@ -1,11 +1,13 @@
 package it.unifi.ing.drivehub.support;
 
+import it.unifi.ing.drivehub.business.banking.IbanGenerator;
+import it.unifi.ing.drivehub.domain.users.BankAccount;
 import it.unifi.ing.drivehub.domain.users.Role;
 import it.unifi.ing.drivehub.domain.users.User;
 import it.unifi.ing.drivehub.domain.vehicles.Brand;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
-import it.unifi.ing.drivehub.domain.vehicles.VehiclePurpose;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 
 import java.math.BigDecimal;
 
@@ -13,47 +15,45 @@ public final class TestFixtures {
     private TestFixtures() { }
 
     public static User customer(long id) {
-        return user(id, "RSSMRA80A01H501U", "Maria", "Rossi", "maria" + id + "@test.it",
-                Role.CUSTOMER, null, true);
+        return new User(id, "Maria", "Rossi", "maria" + id + "@test.it",
+                "encoded-password", Role.CLIENT);
     }
 
     public static User salesman(long id) {
-        return user(id, "VRDLGI80A01H501X", "Luigi", "Verdi", "luigi" + id + "@test.it",
-                Role.SALESMAN, null, true);
+        return new User(id, "Luigi", "Verdi", "luigi" + id + "@test.it",
+                "encoded-password", Role.SALESMAN);
     }
 
     public static User manager(long id) {
-        return user(id, "BNCLCU80A01H501Z", "Luca", "Bianchi", "luca" + id + "@test.it",
-                Role.MANAGER, null, true);
+        return new User(id, "Luca", "Bianchi", "luca" + id + "@test.it",
+                "encoded-password", Role.MANAGER);
     }
 
-    public static User user(long id, String fiscalCode, String firstName, String lastName,
-                            String email, Role role, Long managerId, boolean active) {
-        return new User(id, fiscalCode, firstName, lastName, email, "+39 055 123456",
-                "encoded-password", role, managerId, active);
+    public static User user(long id, String name, String surname, String email, Role role) {
+        return new User(id, name, surname, email, "encoded-password", role);
     }
 
     public static Brand brand() {
-        return new Brand(10L, "Alfa Romeo");
+        return new Brand("Alfa Romeo");
     }
 
     public static VehicleModel model() {
-        return new VehicleModel(20L, brand(), "GIULIA-2025", "Giulia", 2025);
+        return new VehicleModel(20L, "Alfa Romeo", "Giulia", new BigDecimal("40000.00"), 2023);
     }
 
     public static Vehicle saleVehicle(long id, String plate) {
-        return new Vehicle(id, plate, model(), VehiclePurpose.FOR_SALE,
-                new BigDecimal("40000.00"), null, 12_000, it.unifi.ing.drivehub.domain.vehicles.VehicleStatus.AVAILABLE);
+        return new Vehicle(id, 20L, "VIN" + id, plate, 12_000, new BigDecimal("40000.00"), 2023, VehicleState.SALE);
     }
 
     public static Vehicle rentalVehicle(long id, String plate) {
-        return new Vehicle(id, plate, model(), VehiclePurpose.RENTAL,
-                null, new BigDecimal("100.00"), 22_000,
-                it.unifi.ing.drivehub.domain.vehicles.VehicleStatus.AVAILABLE);
+        return new Vehicle(id, 20L, "VIN" + id, plate, 22_000, new BigDecimal("100.00"), 2022, VehicleState.RENT);
     }
 
-    public static Vehicle acquisitionVehicle(long id, String plate) {
-        return new Vehicle(id, plate, model(), VehiclePurpose.ACQUISITION_REQUEST,
-                null, null, 90_000, it.unifi.ing.drivehub.domain.vehicles.VehicleStatus.AVAILABLE);
+    public static Vehicle waitingVehicle(long id, String plate) {
+        return new Vehicle(id, 20L, "VIN" + id, plate, 90_000, new BigDecimal("15000.00"), 2020, VehicleState.WAITING);
+    }
+
+    public static BankAccount bankAccount(long clientId, BigDecimal balance) {
+        return new BankAccount(IbanGenerator.generate(), clientId, balance);
     }
 }

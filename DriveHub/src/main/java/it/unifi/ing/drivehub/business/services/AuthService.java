@@ -1,14 +1,19 @@
 package it.unifi.ing.drivehub.business.services;
 
+import it.unifi.ing.drivehub.business.banking.IbanGenerator;
 import it.unifi.ing.drivehub.business.core.TransactionRunner;
 import it.unifi.ing.drivehub.business.exceptions.AuthenticationException;
 import it.unifi.ing.drivehub.business.exceptions.ConflictException;
 import it.unifi.ing.drivehub.business.exceptions.EntityNotFoundException;
 import it.unifi.ing.drivehub.business.security.PasswordHasher;
 import it.unifi.ing.drivehub.dao.interfaces.DaoFactory;
+import it.unifi.ing.drivehub.domain.DomainRuleViolationException;
+import it.unifi.ing.drivehub.domain.users.BankAccount;
 import it.unifi.ing.drivehub.domain.users.Role;
 import it.unifi.ing.drivehub.domain.users.User;
 
+import java.math.BigDecimal;
+import java.util.Locale;
 import java.util.Objects;
 
 public final class AuthService {
@@ -20,42 +25,86 @@ public final class AuthService {
         this.passwordHasher = Objects.requireNonNull(passwordHasher, "passwordHasher");
     }
 
-    /** All UML roles can register; a salesman may optionally be linked to an existing manager. */
     public User register(RegistrationRequest request, char[] rawPassword) {
         Objects.requireNonNull(request, "request");
-        String normalizedEmail = User.normalizeEmail(request.email());
-        String normalizedFiscalCode = User.normalizeFiscalCode(request.fiscalCode());
+        String normalizedEmail = request.email().trim().toLowerCase(Locale.ROOT);
         return transactions.execute(unit -> {
             if (unit.users().findByEmail(normalizedEmail).isPresent()) {
-                throw new ConflictException("email is already registered");
-            }
-            if (unit.users().findByFiscalCode(normalizedFiscalCode).isPresent()) {
-                throw new ConflictException("fiscal code is already registered");
-            }
-            if (request.managerId() != null) {
-                if (request.role() != Role.SALESMAN) {
-                    throw new IllegalArgumentException("only a salesman may specify a manager");
-                }
-                User manager = unit.users().findById(request.managerId())
-                        .orElseThrow(() -> new EntityNotFoundException("manager", request.managerId()));
-                manager.requireRole(Role.MANAGER);
+                throw new ConflictException("email is already registered: " + normalizedEmail);
             }
             String encodedPassword = passwordHasher.hash(rawPassword);
-            User user = User.register(normalizedFiscalCode, request.firstName(), request.lastName(),
-                    normalizedEmail, request.phone(), encodedPassword, request.role(), request.managerId());
-            return unit.users().save(user);
+            User user = User.create(request.firstName(), request.lastName(), normalizedEmail,
+                    encodedPassword, request.role());
+            User saved = unit.users().save(user);
+
+            // Generazione automatica del conto bancario per i clienti con saldo iniziale 0
+            if (saved.role() == Role.CLIENT || saved.role() == Role.CUSTOMER) {
+                String iban = IbanGenerator.generateForClient(saved.requireId());
+                BankAccount account = BankAccount.create(iban, saved.requireId(), BigDecimal.ZERO.setScale(2));
+                unit.bankAccounts().save(account);
+            }
+            return saved;
         });
     }
 
     public User login(String email, char[] rawPassword) {
-        String normalizedEmail = User.normalizeEmail(email);
+        String normalizedEmail = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
         return transactions.execute(unit -> {
             User user = unit.users().findByEmail(normalizedEmail)
                     .orElseThrow(() -> new AuthenticationException("invalid email or password"));
-            if (!user.active() || !passwordHasher.verify(rawPassword, user.passwordHash())) {
+            if (!passwordHasher.verify(rawPassword, user.passwordHash())) {
                 throw new AuthenticationException("invalid email or password");
             }
             return user;
+        });
+    }
+
+    public void updateEmail(long userId, Role role, char[] currentPassword, String newEmail) {
+        Objects.requireNonNull(newEmail, "newEmail");
+        String normalizedEmail = newEmail.trim().toLowerCase(Locale.ROOT);
+        transactions.execute(unit -> {
+            User user = unit.users().findById(userId)
+                    .orElseThrow(() -> new EntityNotFoundException("user", userId));
+            if (!passwordHasher.verify(currentPassword, user.passwordHash())) {
+                throw new AuthenticationException("Password attuale non corretta");
+            }
+            if (unit.users().findByEmail(normalizedEmail).isPresent() && !user.email().equalsIgnoreCase(normalizedEmail)) {
+                throw new ConflictException("L'indirizzo email è già utilizzato da un altro utente");
+            }
+            unit.users().updateEmail(userId, role, normalizedEmail);
+            return null;
+        });
+    }
+
+    public void updatePassword(long userId, Role role, char[] currentPassword, char[] newPassword) {
+        transactions.execute(unit -> {
+            User user = unit.users().findById(userId)
+                    .orElseThrow(() -> new EntityNotFoundException("user", userId));
+            if (!passwordHasher.verify(currentPassword, user.passwordHash())) {
+                throw new AuthenticationException("Password attuale non corretta");
+            }
+            if (newPassword == null || newPassword.length == 0) {
+                throw new IllegalArgumentException("La nuova password non può essere vuota");
+            }
+            String newHash = passwordHasher.hash(newPassword);
+            unit.users().updatePassword(userId, role, newHash);
+            return null;
+        });
+    }
+
+    public void deleteAccount(long userId, Role role, char[] currentPassword) {
+        transactions.execute(unit -> {
+            User user = unit.users().findById(userId)
+                    .orElseThrow(() -> new EntityNotFoundException("user", userId));
+            if (!passwordHasher.verify(currentPassword, user.passwordHash())) {
+                throw new AuthenticationException("Password attuale non corretta");
+            }
+            // Controllo: non devono essere presenti tuple con quell'utente nelle tabelle TestDrive, Rent, Sale
+            if (unit.users().hasOperations(userId, role)) {
+                throw new DomainRuleViolationException("Impossibile eliminare l'account: sono presenti operazioni registrate (Test Drive, Noleggio o Compravendita) collegate all'utente.");
+            }
+            unit.users().delete(userId, role);
+            return null;
         });
     }
 }

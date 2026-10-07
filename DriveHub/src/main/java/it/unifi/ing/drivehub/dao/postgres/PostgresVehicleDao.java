@@ -2,10 +2,14 @@ package it.unifi.ing.drivehub.dao.postgres;
 
 import it.unifi.ing.drivehub.dao.interfaces.VehicleDao;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleStatus;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 
+import java.math.BigDecimal;
 import java.sql.Connection;
-import java.sql.Types;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,23 +24,75 @@ final class PostgresVehicleDao extends AbstractPostgresDao implements VehicleDao
         if (vehicle.id() != null) {
             throw new IllegalArgumentException("vehicle is already persistent");
         }
-        long id = execute("Could not save vehicle", () -> JdbcSupport.insert(connection, """
-                INSERT INTO vehicles(
-                    plate, model_id, purpose, sale_price, daily_rental_rate, mileage, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, statement -> bindVehicle(statement, vehicle, false)));
+        long id = execute("Could not save vehicle", () -> JdbcSupport.insert(connection,
+                    "INSERT INTO \"vehicle\" (model, vin, licence_plate, kilometers, price, \"year\", state) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                stmt -> {
+                    stmt.setLong(1, vehicle.modelId());
+                    stmt.setString(2, vehicle.vin());
+                    stmt.setString(3, vehicle.licencePlate());
+                    stmt.setInt(4, vehicle.kilometers());
+                    stmt.setBigDecimal(5, vehicle.price());
+                    stmt.setInt(6, vehicle.year());
+                    stmt.setString(7, vehicle.state().name());
+                }));
         vehicle.assignId(id);
         return vehicle;
     }
 
     @Override
-    public void update(Vehicle vehicle) {
-        execute("Could not update vehicle", () -> JdbcSupport.updateExactlyOne(connection, """
-                UPDATE vehicles
-                SET plate = ?, model_id = ?, purpose = ?, sale_price = ?, daily_rental_rate = ?,
-                    mileage = ?, status = ?
-                WHERE id = ?
-                """, statement -> bindVehicle(statement, vehicle, true)));
+    public void updateState(long vehicleId, VehicleState state) {
+        execute("Could not update vehicle state", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "UPDATE \"vehicle\" SET state = ? WHERE id = ?")) {
+                stmt.setString(1, state.name());
+                stmt.setLong(2, vehicleId);
+                stmt.executeUpdate();
+                return null;
+            }
+        });
+    }
+
+    @Override
+    public void updatePrice(long vehicleId, BigDecimal price) {
+        execute("Could not update vehicle price", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "UPDATE \"vehicle\" SET price = ? WHERE id = ?")) {
+                stmt.setBigDecimal(1, price);
+                stmt.setLong(2, vehicleId);
+                stmt.executeUpdate();
+                return null;
+            }
+        });
+    }
+
+    @Override
+    public void updateDetails(long vehicleId, String plate, int km, BigDecimal price, int year, VehicleState state) {
+        execute("Could not update vehicle details", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "UPDATE \"vehicle\" SET licence_plate = ?, kilometers = ?, price = ?, \"year\" = ?, state = ? WHERE id = ?")) {
+                stmt.setString(1, plate);
+                stmt.setInt(2, km);
+                stmt.setBigDecimal(3, price);
+                stmt.setInt(4, year);
+                stmt.setString(5, state.name());
+                stmt.setLong(6, vehicleId);
+                stmt.executeUpdate();
+                return null;
+            }
+        });
+    }
+
+    @Override
+    public void delete(long vehicleId) {
+        execute("Could not delete vehicle", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "DELETE FROM \"vehicle\" WHERE id = ?")) {
+                stmt.setLong(1, vehicleId);
+                stmt.executeUpdate();
+                return null;
+            }
+        });
     }
 
     @Override
@@ -45,88 +101,98 @@ final class PostgresVehicleDao extends AbstractPostgresDao implements VehicleDao
     }
 
     @Override
-    public Optional<Vehicle> findByIdForUpdate(long id) {
-        return findOne("SELECT id FROM vehicles WHERE id = ? FOR UPDATE",
-                statement -> statement.setLong(1, id), loader::vehicle,
-                "Could not lock vehicles row");
+    public Optional<Vehicle> findByVin(String vin) {
+        return execute("Could not find vehicle by VIN", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, model, vin, licence_plate, kilometers, price, \"year\", state FROM \"vehicle\" WHERE vin = ?")) {
+                stmt.setString(1, vin);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return Optional.of(mapRow(rs));
+                    }
+                    return Optional.empty();
+                }
+            }
+        });
     }
 
     @Override
-    public boolean hasOpenBookings(long vehicleId) {
-        return execute("Could not check vehicle commitments", () -> JdbcSupport.queryId(connection, """
-                SELECT id FROM rentals WHERE vehicle_id = ? AND status NOT IN ('CANCELLED', 'COMPLETED')
-                UNION ALL
-                SELECT id FROM test_drives WHERE vehicle_id = ? AND status NOT IN ('CANCELLED', 'COMPLETED')
-                """, statement -> { statement.setLong(1, vehicleId); statement.setLong(2, vehicleId); }).isPresent());
+    public Optional<Vehicle> findByPlate(String plate) {
+        return execute("Could not find vehicle by plate", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, model, vin, licence_plate, kilometers, price, \"year\", state FROM \"vehicle\" WHERE licence_plate = ?")) {
+                stmt.setString(1, plate);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return Optional.of(mapRow(rs));
+                    }
+                    return Optional.empty();
+                }
+            }
+        });
     }
 
     @Override
-    public Optional<Vehicle> findByPlate(String normalizedPlate) {
-        return findOne("SELECT id FROM vehicles WHERE plate = ?", statement ->
-                statement.setString(1, Vehicle.normalizePlate(normalizedPlate)), loader::vehicle,
-                "Could not find vehicle by plate");
+    public List<Vehicle> findByState(VehicleState state) {
+        return execute("Could not find vehicles by state", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, model, vin, licence_plate, kilometers, price, \"year\", state FROM \"vehicle\" WHERE state = ?")) {
+                stmt.setString(1, state.name());
+                try (ResultSet rs = stmt.executeQuery()) {
+                    List<Vehicle> list = new ArrayList<>();
+                    while (rs.next()) {
+                        list.add(mapRow(rs));
+                    }
+                    return List.copyOf(list);
+                }
+            }
+        });
     }
 
     @Override
     public List<Vehicle> findAll() {
-        return findMany("SELECT id FROM vehicles ORDER BY plate, id", statement -> { }, loader::vehicle,
-                "Could not list vehicles");
+        return execute("Could not find all vehicles", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, model, vin, licence_plate, kilometers, price, \"year\", state FROM \"vehicle\"")) {
+                try (ResultSet rs = stmt.executeQuery()) {
+                    List<Vehicle> list = new ArrayList<>();
+                    while (rs.next()) {
+                        list.add(mapRow(rs));
+                    }
+                    return List.copyOf(list);
+                }
+            }
+        });
     }
 
     @Override
-    public List<Vehicle> findByModel(long modelId) {
-        return findMany("SELECT id FROM vehicles WHERE model_id = ? ORDER BY plate, id", statement ->
-                statement.setLong(1, modelId), loader::vehicle, "Could not list vehicles by model");
+    public boolean hasOperations(long vehicleId) {
+        return execute("Could not check operations for vehicle", () -> {
+            String sql = "SELECT 1 FROM (" +
+                    "SELECT vehicle FROM \"test_drive\" WHERE vehicle = ? UNION ALL " +
+                    "SELECT vehicle FROM \"rent\" WHERE vehicle = ? UNION ALL " +
+                    "SELECT vehicle FROM \"sale\" WHERE vehicle = ?" +
+                    ") ops LIMIT 1";
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setLong(1, vehicleId);
+                stmt.setLong(2, vehicleId);
+                stmt.setLong(3, vehicleId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    return rs.next();
+                }
+            }
+        });
     }
 
-    @Override
-    public List<Vehicle> findAvailableForSale() {
-        return findMany("""
-                SELECT id FROM vehicles
-                WHERE purpose = 'FOR_SALE' AND status = 'AVAILABLE'
-                ORDER BY plate, id
-                """, statement -> { }, loader::vehicle, "Could not list vehicles available for sale");
-    }
-
-    @Override
-    public List<Vehicle> findAvailableForRental() {
-        return findMany("""
-                SELECT id FROM vehicles
-                WHERE purpose = 'RENTAL' AND status = 'AVAILABLE'
-                ORDER BY plate, id
-                """, statement -> { }, loader::vehicle, "Could not list vehicles available for rental");
-    }
-
-    @Override
-    public boolean updateStatusIfCurrent(long vehicleId, VehicleStatus expected, VehicleStatus next) {
-        return execute("Could not atomically transition vehicle status", () -> JdbcSupport.update(connection, """
-                UPDATE vehicles SET status = ? WHERE id = ? AND status = ?
-                """, statement -> {
-            statement.setString(1, next.name());
-            statement.setLong(2, vehicleId);
-            statement.setString(3, expected.name());
-        }) == 1);
-    }
-
-    private static void bindVehicle(java.sql.PreparedStatement statement, Vehicle vehicle, boolean includeId)
-            throws java.sql.SQLException {
-        statement.setString(1, vehicle.plate());
-        statement.setLong(2, vehicle.model().requireId());
-        statement.setString(3, vehicle.purpose().name());
-        if (vehicle.salePrice() == null) {
-            statement.setNull(4, Types.NUMERIC);
-        } else {
-            statement.setBigDecimal(4, vehicle.salePrice());
-        }
-        if (vehicle.dailyRentalRate() == null) {
-            statement.setNull(5, Types.NUMERIC);
-        } else {
-            statement.setBigDecimal(5, vehicle.dailyRentalRate());
-        }
-        statement.setLong(6, vehicle.mileage());
-        statement.setString(7, vehicle.status().name());
-        if (includeId) {
-            statement.setLong(8, vehicle.requireId());
-        }
+    private static Vehicle mapRow(ResultSet rs) throws SQLException {
+        return new Vehicle(
+                rs.getLong("id"),
+                rs.getLong("model"),
+                rs.getString("vin"),
+                rs.getString("licence_plate"),
+                rs.getInt("kilometers"),
+                rs.getBigDecimal("price"),
+                rs.getInt("year"),
+                VehicleState.fromString(rs.getString("state")));
     }
 }

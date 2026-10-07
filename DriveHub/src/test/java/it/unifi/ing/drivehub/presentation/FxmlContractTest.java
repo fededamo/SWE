@@ -29,7 +29,7 @@ class FxmlContractTest {
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         try (var paths = Files.list(VIEW_ROOT)) {
             var views = paths.filter(path -> path.toString().endsWith(".fxml")).sorted().toList();
-            assertEquals(7, views.size(), "unexpected number of FXML views");
+            assertEquals(6, views.size(), "unexpected number of FXML views");
             for (Path view : views) {
                 factory.newDocumentBuilder().parse(view.toFile());
                 String source = Files.readString(view);

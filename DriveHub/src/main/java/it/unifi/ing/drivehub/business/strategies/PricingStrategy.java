@@ -1,14 +1,16 @@
 package it.unifi.ing.drivehub.business.strategies;
 
-import it.unifi.ing.drivehub.domain.sales.Discount;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.List;
 
 public interface PricingStrategy {
-    BigDecimal salePrice(Vehicle vehicle, List<Discount> discounts, LocalDate date);
+    BigDecimal quoteVehiclePrice(Vehicle vehicle, VehicleModel model, int promotionalDiscount);
 
-    BigDecimal rentalPrice(Vehicle vehicle, long days, List<Discount> discounts, LocalDate date);
+    BigDecimal rentalPrice(Vehicle vehicle, long days);
+
+    BigDecimal calculateDeposit(BigDecimal price);
+
+    BigDecimal calculateValuation(BigDecimal modelReleasePrice, String licencePlate, int kilometers, int vehicleYear);
 }

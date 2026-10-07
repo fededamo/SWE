@@ -3,123 +3,107 @@ package it.unifi.ing.drivehub.business.services;
 import it.unifi.ing.drivehub.business.core.TransactionRunner;
 import it.unifi.ing.drivehub.business.exceptions.EntityNotFoundException;
 import it.unifi.ing.drivehub.business.strategies.PricingStrategy;
+import it.unifi.ing.drivehub.business.strategies.StandardPricingStrategy;
 import it.unifi.ing.drivehub.dao.interfaces.DaoFactory;
-import it.unifi.ing.drivehub.domain.sales.Discount;
-import it.unifi.ing.drivehub.domain.users.Role;
-import it.unifi.ing.drivehub.domain.users.User;
+import it.unifi.ing.drivehub.domain.vehicles.ModelDiscount;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleDiscount;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class PricingService {
     private final TransactionRunner transactions;
-    private final PricingStrategy pricing;
+    private final PricingStrategy pricingStrategy;
 
-    public PricingService(DaoFactory daoFactory, PricingStrategy pricing) {
+    public PricingService(DaoFactory daoFactory) {
+        this(daoFactory, new StandardPricingStrategy());
+    }
+
+    public PricingService(DaoFactory daoFactory, PricingStrategy pricingStrategy) {
         this.transactions = new TransactionRunner(daoFactory);
-        this.pricing = Objects.requireNonNull(pricing, "pricing");
+        this.pricingStrategy = Objects.requireNonNull(pricingStrategy, "pricingStrategy");
     }
 
-    public BigDecimal quoteSale(long vehicleId, LocalDate date) {
+    public BigDecimal quotePrice(long vehicleId) {
         return transactions.execute(unit -> {
             Vehicle vehicle = unit.vehicles().findById(vehicleId)
                     .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
-            return pricing.salePrice(vehicle, unit.discounts().findActiveOn(date), date);
+            VehicleModel model = unit.vehicleModels().findById(vehicle.modelId())
+                    .orElseThrow(() -> new EntityNotFoundException("model", vehicle.modelId()));
+
+            Optional<ModelDiscount> md = unit.discounts().findModelDiscount(vehicle.modelId());
+            Optional<VehicleDiscount> vd = unit.discounts().findVehicleDiscount(vehicle.id());
+
+            // Se presente sia sconto veicolo che modello, si applica solo il maggiore
+            int promoDiscount = Math.max(
+                    md.map(ModelDiscount::value).orElse(0),
+                    vd.map(VehicleDiscount::value).orElse(0)
+            );
+
+            return pricingStrategy.quoteVehiclePrice(vehicle, model, promoDiscount);
         });
     }
 
-    /** Demonstration policy A-10: reserve with ten percent or pay the entire quote. */
-    public BigDecimal quoteSalePayment(long vehicleId, boolean fullPurchase, LocalDate date) {
-        BigDecimal total = quoteSale(vehicleId, date);
-        return fullPurchase ? total : requiredSaleDeposit(total);
+    public BigDecimal calculateDeposit(BigDecimal price) {
+        return pricingStrategy.calculateDeposit(price);
     }
 
-    public static BigDecimal requiredSaleDeposit(BigDecimal total) {
-        Objects.requireNonNull(total, "total");
-        if (total.signum() <= 0) {
-            throw new IllegalArgumentException("sale total must be positive");
-        }
-        return total.multiply(new BigDecimal("0.10")).setScale(2, RoundingMode.HALF_UP)
-                .max(new BigDecimal("0.01")).min(total);
+    public static BigDecimal calculateDefaultDeposit(BigDecimal total) {
+        return new StandardPricingStrategy().calculateDeposit(total);
     }
 
-    public BigDecimal quoteRental(long vehicleId, long days, LocalDate date) {
+    public BigDecimal calculateRentalPrice(Vehicle vehicle, long days) {
+        return pricingStrategy.rentalPrice(vehicle, days);
+    }
+
+    public BigDecimal calculateValuation(BigDecimal modelReleasePrice, String plate, int km, int year) {
+        return pricingStrategy.calculateValuation(modelReleasePrice, plate, km, year);
+    }
+
+    public BigDecimal quoteRentalPrice(long vehicleId, long days) {
         return transactions.execute(unit -> {
             Vehicle vehicle = unit.vehicles().findById(vehicleId)
                     .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
-            return pricing.rentalPrice(vehicle, days, unit.discounts().findActiveOn(date), date);
+            return calculateRentalPrice(vehicle, days);
         });
     }
 
-    public Discount applyDiscount(long managerId, String name, long vehicleId, BigDecimal percentage,
-                                  LocalDate startsOn, LocalDate endsOn) {
+    public BigDecimal quoteValuation(String brandName, String modelName, String plate, int km, int year) {
         return transactions.execute(unit -> {
-            requireManager(unit.users().findById(managerId)
-                    .orElseThrow(() -> new EntityNotFoundException("manager", managerId)));
-            Vehicle vehicle = unit.vehicles().findByIdForUpdate(vehicleId)
-                    .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
-            Discount existing = unit.discounts().findAll().stream()
-                    .filter(discount -> discount.vehicle().requireId() == vehicleId)
-                    .findFirst()
-                    .orElse(null);
-            if (existing == null) {
-                return unit.discounts().save(
-                        Discount.create(name, vehicle, percentage, startsOn, endsOn));
-            }
-            existing.replace(name, percentage, startsOn, endsOn);
-            unit.discounts().update(existing);
-            return existing;
+            Optional<VehicleModel> modelOpt = unit.vehicleModels().findByName(modelName);
+            BigDecimal releasePrice = modelOpt.map(VehicleModel::releasePrice).orElse(new BigDecimal("25000.00"));
+            return calculateValuation(releasePrice, plate, km, year);
         });
     }
 
-    public void removeDiscount(long managerId, long discountId) {
+    public void setModelDiscount(long modelId, int percentage) {
         transactions.execute(unit -> {
-            requireManager(unit.users().findById(managerId)
-                    .orElseThrow(() -> new EntityNotFoundException("manager", managerId)));
-            Discount discount = unit.discounts().findById(discountId)
-                    .orElseThrow(() -> new EntityNotFoundException("discount", discountId));
-            unit.vehicles().findByIdForUpdate(discount.vehicle().requireId()).orElseThrow();
-            discount = unit.discounts().findById(discountId).orElseThrow();
-            discount.disable();
-            unit.discounts().update(discount);
+            unit.discounts().saveModelDiscount(new ModelDiscount(modelId, percentage));
             return null;
         });
     }
 
-    public Vehicle updateSalePrice(long managerId, long vehicleId, BigDecimal price) {
-        return updateVehiclePrice(managerId, vehicleId, price, true);
-    }
-
-    public Vehicle updateDailyRentalRate(long managerId, long vehicleId, BigDecimal rate) {
-        return updateVehiclePrice(managerId, vehicleId, rate, false);
-    }
-
-    public List<Discount> discounts() {
-        return transactions.execute(unit -> List.copyOf(unit.discounts().findAll()));
-    }
-
-    private Vehicle updateVehiclePrice(long managerId, long vehicleId, BigDecimal amount, boolean sale) {
-        return transactions.execute(unit -> {
-            User manager = unit.users().findById(managerId)
-                    .orElseThrow(() -> new EntityNotFoundException("manager", managerId));
-            requireManager(manager);
-            Vehicle vehicle = unit.vehicles().findByIdForUpdate(vehicleId)
-                    .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
-            if (sale) {
-                vehicle.updateSalePrice(manager, amount);
-            } else {
-                vehicle.updateDailyRentalRate(manager, amount);
-            }
-            unit.vehicles().update(vehicle);
-            return vehicle;
+    public void setVehicleDiscount(long vehicleId, int percentage) {
+        transactions.execute(unit -> {
+            unit.discounts().saveVehicleDiscount(new VehicleDiscount(vehicleId, percentage));
+            return null;
         });
     }
 
-    private static void requireManager(User user) {
-        user.requireRole(Role.MANAGER);
+    public void removeModelDiscount(long modelId) {
+        transactions.execute(unit -> {
+            unit.discounts().removeModelDiscount(modelId);
+            return null;
+        });
+    }
+
+    public void removeVehicleDiscount(long vehicleId) {
+        transactions.execute(unit -> {
+            unit.discounts().removeVehicleDiscount(vehicleId);
+            return null;
+        });
     }
 }

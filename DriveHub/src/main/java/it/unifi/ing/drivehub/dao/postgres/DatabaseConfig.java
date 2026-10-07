@@ -26,7 +26,40 @@ public record DatabaseConfig(String url, String user, String password, boolean s
     }
 
     public static DatabaseConfig fromEnvironment() {
-        return from(System.getProperties(), System.getenv());
+        Properties props = new Properties();
+        loadDotEnvIfPresent(props);
+        props.putAll(System.getProperties());
+        return from(props, System.getenv());
+    }
+
+    private static void loadDotEnvIfPresent(Properties props) {
+        java.nio.file.Path[] candidates = {
+            java.nio.file.Paths.get(".env"),
+            java.nio.file.Paths.get("DriveHub/.env"),
+            java.nio.file.Paths.get("../.env")
+        };
+        for (java.nio.file.Path p : candidates) {
+            if (java.nio.file.Files.isRegularFile(p)) {
+                try (java.io.BufferedReader reader = java.nio.file.Files.newBufferedReader(p, java.nio.charset.StandardCharsets.UTF_8)) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        line = line.trim();
+                        if (!line.isEmpty() && !line.startsWith("#") && line.contains("=")) {
+                            int idx = line.indexOf('=');
+                            String key = line.substring(0, idx).trim();
+                            String val = line.substring(idx + 1).trim();
+                            props.setProperty(key, val);
+                            if (key.equals(PASSWORD_ENV)) props.setProperty(PASSWORD_PROPERTY, val);
+                            if (key.equals(USER_ENV)) props.setProperty(USER_PROPERTY, val);
+                            if (key.equals(URL_ENV)) props.setProperty(URL_PROPERTY, val);
+                            if (key.equals(SEED_ENV)) props.setProperty(SEED_PROPERTY, val);
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+                break;
+            }
+        }
     }
 
     static DatabaseConfig from(Properties properties, Map<String, String> environment) {
@@ -36,9 +69,9 @@ public record DatabaseConfig(String url, String user, String password, boolean s
         String url = setting(properties, environment, URL_PROPERTY, URL_ENV,
                 "jdbc:postgresql://localhost:5432/drivehub");
         String user = setting(properties, environment, USER_PROPERTY, USER_ENV, "drivehub");
-        String password = setting(properties, environment, PASSWORD_PROPERTY, PASSWORD_ENV, null);
+        String password = setting(properties, environment, PASSWORD_PROPERTY, PASSWORD_ENV, "drivehub");
         boolean seedDemo = Boolean.parseBoolean(setting(
-                properties, environment, SEED_PROPERTY, SEED_ENV, "false"));
+                properties, environment, SEED_PROPERTY, SEED_ENV, "true"));
         return new DatabaseConfig(url, user, password, seedDemo);
     }
 

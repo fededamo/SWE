@@ -1,15 +1,14 @@
 package it.unifi.ing.drivehub.presentation.core;
 
 import it.unifi.ing.drivehub.domain.users.Role;
-import it.unifi.ing.drivehub.domain.vehicles.VehiclePurpose;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleStatus;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Objects;
 
-/** Immutable projections consumed by JavaFX controllers. */
+/** Proiezioni immutabili per i controller JavaFX. */
 public final class UiModels {
     private UiModels() {
     }
@@ -22,42 +21,48 @@ public final class UiModels {
         }
     }
 
-    public record VehicleItem(long id, String plate, String displayName, VehiclePurpose purpose,
-                              long mileage, BigDecimal price, VehicleStatus status,
-                              BigDecimal discountPercentage) {
+    public record BankAccountItem(String iban, long clientId, BigDecimal balance) {
     }
 
-    public record TestDriveItem(long id, String code, String customer, String vehicle,
-                                LocalDateTime scheduledAt, String status) {
+    public record VehicleItem(long id, String vin, String plate, String displayName,
+                              int kilometers, BigDecimal price, int year,
+                              VehicleState state, Integer discountPercentage) {
     }
 
-    public record RentalItem(long id, String code, String customer, String vehicle,
-                             LocalDate startDate, LocalDate endDate, BigDecimal amount,
-                             String status, Long salesmanId) {
+    public record RequestItem(long id, long vehicleId, String vehicleDesc, long clientId,
+                              Long salesmanId, BigDecimal deposit, LocalDate expDate,
+                              boolean isPurchase, boolean isSaleProposal) {
     }
 
-    public record ProposalItem(long id, String code, String customer, String salesman,
-                               String vehicle, BigDecimal requestedAmount, BigDecimal offeredAmount,
-                               String status) {
+    public record RentItem(long id, long vehicleId, String vehicleDesc, long clientId,
+                           BigDecimal amount, LocalDate startDate, LocalDate endDate) {
     }
 
-    public record StockOrderItem(long id, String code, String model, int quantity,
-                                 BigDecimal unitCost, String status) {
+    public record TestDriveItem(long id, long vehicleId, String vehicleDesc, long clientId,
+                                LocalDate date, LocalTime start) {
     }
 
-    public record Dashboard(long totalVehicles, long activeRentals, BigDecimal recordedRevenue,
-                            long pendingProposals) {
+    public record SaleItem(long id, Long vehicleId, String vehicleDesc, Long salesmanId,
+                           long clientId, BigDecimal amount, LocalDate date,
+                           boolean isDefaultFailure, boolean isAcquisition) {
     }
 
-    public record ActivityItem(String type, String description, BigDecimal amount,
-                               LocalDateTime occurredAt) {
+    public record VehicleSaleSubmission(String brand, String model, int modelYear,
+                                        String vin, String plate, int kilometers,
+                                        BigDecimal price, int vehicleYear) {
     }
 
-    public record VehicleSaleRequest(String plate, String brand, String model, int year,
-                                     long mileage, BigDecimal requestedAmount) {
+    public record BrandItem(String name) {
+        @Override
+        public String toString() {
+            return name;
+        }
     }
 
-    public record StockOrderRequest(String brand, String model, int year, int quantity,
-                                    BigDecimal unitCost) {
+    public record ModelItem(long id, String brand, String name, BigDecimal releasePrice, int releaseYear) {
+        @Override
+        public String toString() {
+            return brand + " " + name + " (" + releaseYear + " - " + releasePrice + " €)";
+        }
     }
 }

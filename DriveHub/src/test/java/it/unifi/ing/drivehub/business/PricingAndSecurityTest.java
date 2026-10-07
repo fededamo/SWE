@@ -2,62 +2,53 @@ package it.unifi.ing.drivehub.business;
 
 import it.unifi.ing.drivehub.business.security.Pbkdf2PasswordHasher;
 import it.unifi.ing.drivehub.business.strategies.StandardPricingStrategy;
-import it.unifi.ing.drivehub.domain.sales.Discount;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 import it.unifi.ing.drivehub.support.TestFixtures;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.security.SecureRandom;
-import java.time.LocalDate;
-import java.util.List;
+import java.time.Year;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class PricingAndSecurityTest {
     @Test
-    @DisplayName("RF-PRICE-02: a discount applies only to its exact target vehicle")
-    void discountTargetsOneVehicle() {
-        Vehicle target = TestFixtures.saleVehicle(30L, "AB123CD");
-        Vehicle other = TestFixtures.saleVehicle(31L, "CD456EF");
-        LocalDate today = LocalDate.of(2026, 8, 23);
-        Discount discount = Discount.create("Target promotion", target, new BigDecimal("10"),
-                today.minusDays(1), today.plusDays(1));
+    @DisplayName("Pricing strategy applies discount cascade to sale price")
+    void discountAppliesToSalePrice() {
+        int currentYear = Year.now().getValue();
+        VehicleModel model = new VehicleModel(20L, "Alfa Romeo", "Giulia", new BigDecimal("40000.00"), currentYear);
+        // Nuovo veicolo senza targa, 0 km, anno corrente
+        Vehicle newCar = Vehicle.create(20L, "VIN123", null, 0, new BigDecimal("40000.00"), currentYear, VehicleState.SALE);
         StandardPricingStrategy strategy = new StandardPricingStrategy();
 
-        assertEquals(new BigDecimal("36000.00"), strategy.salePrice(target, List.of(discount), today));
-        assertEquals(new BigDecimal("40000.00"), strategy.salePrice(other, List.of(discount), today));
+        // 40000 con 10% promo = 36000
+        assertEquals(new BigDecimal("36000.00"), strategy.quoteVehiclePrice(newCar, model, 10));
+        // 0% promo = 40000
+        assertEquals(new BigDecimal("40000.00"), strategy.quoteVehiclePrice(newCar, model, 0));
     }
 
     @Test
-    @DisplayName("RF-PRICE-03: promotions do not stack; the best applicable one wins")
-    void bestPromotionWins() {
-        Vehicle target = TestFixtures.rentalVehicle(30L, "AB123CD");
-        LocalDate today = LocalDate.of(2026, 8, 23);
-        Discount five = Discount.create("Five", target, new BigDecimal("5"), today, today);
-        Discount twenty = Discount.create("Twenty", target, new BigDecimal("20"), today, today);
+    @DisplayName("Pricing strategy applies rental formula (giorni * tariffa_base) * 0.95^(giorni - 1)")
+    void discountAppliesToRental() {
+        // Veicolo con prezzo 40000 -> tariffa giornaliera = 40000 / 1000 = 40.00 €
+        Vehicle target = new Vehicle(30L, 20L, "VIN30", "AB123CD", 22_000, new BigDecimal("40000.00"), 2022, VehicleState.RENT);
+        StandardPricingStrategy strategy = new StandardPricingStrategy();
 
-        BigDecimal quoted = new StandardPricingStrategy().rentalPrice(
-                target, 3, List.of(five, twenty), today);
+        // 1 giorno: 1 * 40 * (0.95)^0 = 40.00 €
+        assertEquals(new BigDecimal("40.00"), strategy.rentalPrice(target, 1));
 
-        assertEquals(new BigDecimal("240.00"), quoted);
-    }
+        // 2 giorni: 2 * 40 * (0.95)^1 = 76.00 €
+        assertEquals(new BigDecimal("76.00"), strategy.rentalPrice(target, 2));
 
-    @Test
-    @DisplayName("RF-PRICE-04: the ER discount row can be disabled and replaced")
-    void discountCanBeReactivatedWithNewTerms() {
-        Vehicle target = TestFixtures.saleVehicle(30L, "AB123CD");
-        LocalDate today = LocalDate.of(2026, 8, 23);
-        Discount discount = Discount.create("Summer", target, new BigDecimal("10"), today, today);
-        discount.disable();
+        // 3 giorni: 3 * 40 * (0.95)^2 = 108.30 €
+        assertEquals(new BigDecimal("108.30"), strategy.rentalPrice(target, 3));
 
-        discount.replace("Autumn", new BigDecimal("15"), today.plusDays(1), today.plusDays(30));
-
-        assertTrue(discount.enabled());
-        assertEquals("Autumn", discount.name());
-        assertEquals(new BigDecimal("15"), discount.percentage());
-        assertEquals(today.plusDays(1), discount.startsOn());
+        // 4 giorni: 4 * 40 * (0.95)^3 = 137.18 €
+        assertEquals(new BigDecimal("137.18"), strategy.rentalPrice(target, 4));
     }
 
     @Test

@@ -1,26 +1,26 @@
 package it.unifi.ing.drivehub.dao.interfaces;
 
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleStatus;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
 public interface VehicleDao {
     Vehicle save(Vehicle vehicle);
-    void update(Vehicle vehicle);
+    void updateState(long vehicleId, VehicleState state);
+    void updatePrice(long vehicleId, BigDecimal price);
+    void updateDetails(long vehicleId, String plate, int km, BigDecimal price, int year, VehicleState state);
+    void delete(long vehicleId);
     Optional<Vehicle> findById(long id);
-
-    /** Locks the row until commit/rollback, then reads its current persisted state. */
-    Optional<Vehicle> findByIdForUpdate(long id);
-    /** Pending or ongoing rentals/test drives for operations that remove availability. */
-    boolean hasOpenBookings(long vehicleId);
-    Optional<Vehicle> findByPlate(String normalizedPlate);
+    default Optional<Vehicle> findByIdForUpdate(long id) { return findById(id); }
+    default void update(Vehicle vehicle) {
+        updateDetails(vehicle.requireId(), vehicle.licencePlate(), vehicle.kilometers(), vehicle.price(), vehicle.year(), vehicle.state());
+    }
+    Optional<Vehicle> findByVin(String vin);
+    Optional<Vehicle> findByPlate(String plate);
+    List<Vehicle> findByState(VehicleState state);
     List<Vehicle> findAll();
-    List<Vehicle> findByModel(long modelId);
-    List<Vehicle> findAvailableForSale();
-    List<Vehicle> findAvailableForRental();
-
-    /** Compare-and-set used to prevent two bookings from reserving the same vehicle. */
-    boolean updateStatusIfCurrent(long vehicleId, VehicleStatus expected, VehicleStatus next);
+    boolean hasOperations(long vehicleId);
 }

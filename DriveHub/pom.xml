@@ -53,7 +53,6 @@
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <version>2.2.224</version>
-            <scope>test</scope>
         </dependency>
     </dependencies>
 
@@ -73,9 +72,10 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
+                    <forkCount>0</forkCount>
                     <useModulePath>false</useModulePath>
                     <!-- Premain avoids dynamic self-attachment; JaCoCo supplies the late argLine. -->
-                    <argLine>@{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
+                    <argLine>-XX:+UseSerialGC -Xmx128m -Xms32m -Xshare:off -XX:TieredStopAtLevel=1 @{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
                     <excludedGroups>${excludedTestGroups}</excludedGroups>
                 </configuration>
             </plugin>
@@ -86,6 +86,11 @@
                 <configuration>
                     <mainClass>it.unifi.ing.drivehub.DriveHubApplication</mainClass>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
             </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>

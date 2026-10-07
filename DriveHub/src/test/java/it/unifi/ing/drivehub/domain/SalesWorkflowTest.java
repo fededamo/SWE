@@ -1,89 +1,73 @@
 package it.unifi.ing.drivehub.domain;
 
-import it.unifi.ing.drivehub.domain.sales.Payment;
-import it.unifi.ing.drivehub.domain.sales.PaymentMethod;
-import it.unifi.ing.drivehub.domain.sales.PaymentPurpose;
-import it.unifi.ing.drivehub.domain.sales.PaymentReferenceType;
-import it.unifi.ing.drivehub.domain.sales.PaymentStatus;
-import it.unifi.ing.drivehub.domain.sales.PurchaseProposal;
-import it.unifi.ing.drivehub.domain.sales.PurchaseProposalStatus;
-import it.unifi.ing.drivehub.domain.sales.SaleOrder;
-import it.unifi.ing.drivehub.domain.sales.SaleOrderStatus;
-import it.unifi.ing.drivehub.domain.users.User;
+import it.unifi.ing.drivehub.domain.users.BankAccount;
+import it.unifi.ing.drivehub.business.banking.IbanGenerator;
+import it.unifi.ing.drivehub.domain.sales.Request;
+import it.unifi.ing.drivehub.domain.sales.Sale;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleStatus;
-import it.unifi.ing.drivehub.domain.vehicles.StockOrder;
-import it.unifi.ing.drivehub.domain.vehicles.StockOrderStatus;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 import it.unifi.ing.drivehub.support.TestFixtures;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class SalesWorkflowTest {
     @Test
-    @DisplayName("UC-C-SELL-01: request, salesman offer and manager approval are ordered")
-    void purchaseProposalWorkflow() {
-        PurchaseProposal proposal = PurchaseProposal.request(TestFixtures.customer(1L),
-                TestFixtures.acquisitionVehicle(40L, "ZA123YX"), new BigDecimal("15000"),
-                "Well maintained", Instant.parse("2026-01-01T10:00:00Z"));
+    @DisplayName("Request creation sets null expDate and positive deposit")
+    void requestCreation() {
+        Request request = Request.create(2L, 1L, new BigDecimal("4000.00"));
 
-        assertThrows(DomainRuleViolationException.class,
-                () -> proposal.approve(TestFixtures.manager(3L), "premature"));
-        proposal.submitOffer(TestFixtures.salesman(2L), new BigDecimal("13500"), "Subject to inspection");
-        proposal.approve(TestFixtures.manager(3L), "Margin approved");
-
-        assertEquals(PurchaseProposalStatus.APPROVED, proposal.status());
-        assertEquals(2L, proposal.salesman().id());
-        assertEquals(3L, proposal.manager().id());
+        assertNull(request.expDate());
+        assertEquals(1L, request.clientId());
+        assertEquals(2L, request.vehicleId());
+        assertEquals(new BigDecimal("4000.00"), request.deposit());
     }
 
     @Test
-    @DisplayName("UC-C-PURCHASE-01: acconto and balance drive sale order to paid")
-    void depositAndBalance() {
-        Vehicle vehicle = TestFixtures.saleVehicle(30L, "AB123CD");
-        SaleOrder order = SaleOrder.reserve(TestFixtures.customer(1L), vehicle,
-                new BigDecimal("40000"), new BigDecimal("4000"));
+    @DisplayName("Request unlock sets 30-day expiration date")
+    void requestUnlockSetsExpDate() {
+        Request request = Request.create(1L, 2L, new BigDecimal("4000.00"));
+        LocalDate expiry = LocalDate.now().plusDays(30);
 
-        order.recordPayment(new BigDecimal("4000"));
-        assertEquals(SaleOrderStatus.DEPOSIT_PAID, order.status());
-        order.recordPayment(new BigDecimal("36000"));
-        assertEquals(SaleOrderStatus.PAID, order.status());
+        request.unlock(expiry);
 
-        User salesman = TestFixtures.salesman(2L);
-        order.assignSalesman(salesman);
-        order.complete(salesman);
-        assertEquals(SaleOrderStatus.COMPLETED, order.status());
-        assertEquals(VehicleStatus.SOLD, vehicle.status());
+        assertEquals(expiry, request.expDate());
+        assertTrue(request.isUnlocked());
     }
 
     @Test
-    @DisplayName("PAY-STATE-01: payment terminal outcome can be recorded only once")
-    void paymentHasSingleTerminalOutcome() {
-        Payment payment = Payment.start(TestFixtures.customer(1L), PaymentReferenceType.RENTAL, 12L,
-                PaymentPurpose.RENTAL, PaymentMethod.CARD, new BigDecimal("250"), Instant.now());
+    @DisplayName("Sale creation records completed sale or default failure")
+    void saleCreation() {
+        Sale completed = Sale.completed(1L, 2L, 3L, new BigDecimal("36000.00"), LocalDateTime.now());
+        assertFalse(completed.isDefaultFailure());
+        assertEquals(1L, completed.vehicleId());
+        assertEquals(2L, completed.clientId());
+        assertEquals(3L, completed.salesmanId());
 
-        payment.complete("gateway-123");
-
-        assertEquals(PaymentStatus.COMPLETED, payment.status());
-        assertThrows(DomainRuleViolationException.class, () -> payment.fail("late failure"));
+        Sale failure = Sale.penalty(2L, new BigDecimal("800.00"), LocalDateTime.now());
+        assertTrue(failure.isDefaultFailure());
+        assertNull(failure.vehicleId());
+        assertNull(failure.salesmanId());
+        assertEquals(2L, failure.clientId());
     }
 
     @Test
-    @DisplayName("UC-M-STOCK-01: manager confirms and receives a stock order in sequence")
-    void stockOrderWorkflow() {
-        User manager = TestFixtures.manager(3L);
-        StockOrder order = StockOrder.place(manager, TestFixtures.model(), 3,
-                new BigDecimal("25000"), LocalDate.of(2026, 8, 1));
+    @DisplayName("BankAccount enforces non-negative balance on withdrawal")
+    void bankAccountWithdrawal() {
+        String iban = IbanGenerator.generate();
+        BankAccount account = new BankAccount(iban, 1L, new BigDecimal("500.00"));
 
-        order.confirm(manager);
-        order.receive(manager, LocalDate.of(2026, 8, 20));
+        account.deposit(new BigDecimal("200.00"));
+        assertEquals(new BigDecimal("700.00"), account.balance());
 
-        assertEquals(StockOrderStatus.RECEIVED, order.status());
-        assertEquals(new BigDecimal("75000"), order.totalCost());
+        account.withdraw(new BigDecimal("300.00"));
+        assertEquals(new BigDecimal("400.00"), account.balance());
+
+        assertThrows(IllegalStateException.class, () -> account.withdraw(new BigDecimal("500.00")));
     }
 }

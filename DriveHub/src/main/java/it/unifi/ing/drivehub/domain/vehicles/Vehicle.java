@@ -2,198 +2,172 @@ package it.unifi.ing.drivehub.domain.vehicles;
 
 import it.unifi.ing.drivehub.domain.BaseEntity;
 import it.unifi.ing.drivehub.domain.DomainRuleViolationException;
-import it.unifi.ing.drivehub.domain.observer.InventoryEvent;
-import it.unifi.ing.drivehub.domain.observer.InventoryEventType;
-import it.unifi.ing.drivehub.domain.observer.InventoryObserver;
-import it.unifi.ing.drivehub.domain.observer.InventorySubject;
 
 import java.math.BigDecimal;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
+import java.time.LocalDate;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Pattern;
 
-public final class Vehicle extends BaseEntity implements InventorySubject {
-    private static final Pattern PLATE = Pattern.compile("^[A-Z0-9]{5,10}$");
+public final class Vehicle extends BaseEntity {
+    private static final Pattern PLATE_PATTERN = Pattern.compile("^[A-Z0-9]{5,10}$");
 
-    private final String plate;
-    private final VehicleModel model;
-    private final VehiclePurpose purpose;
-    private BigDecimal salePrice;
-    private BigDecimal dailyRentalRate;
-    private final long mileage;
-    private final Clock clock;
-    private final List<InventoryObserver> observers = new CopyOnWriteArrayList<>();
-    private VehicleStatus status;
+    private final long modelId;
+    private final String vin;
+    private String licencePlate;
+    private int kilometers;
+    private BigDecimal price;
+    private int year;
+    private VehicleState state;
 
-    public Vehicle(Long id, String plate, VehicleModel model, VehiclePurpose purpose, BigDecimal salePrice,
-                   BigDecimal dailyRentalRate, long mileage, VehicleStatus status) {
-        this(id, plate, model, purpose, salePrice, dailyRentalRate, mileage, status, Clock.systemUTC());
-    }
-
-    Vehicle(Long id, String plate, VehicleModel model, VehiclePurpose purpose, BigDecimal salePrice,
-            BigDecimal dailyRentalRate, long mileage, VehicleStatus status, Clock clock) {
+    public Vehicle(Long id, long modelId, String vin, String licencePlate,
+                   int kilometers, BigDecimal price, int year, VehicleState state) {
         super(id);
-        this.plate = normalizePlate(plate);
-        this.model = Objects.requireNonNull(model, "model");
-        this.purpose = Objects.requireNonNull(purpose, "purpose");
-        this.salePrice = validatePrice(salePrice, "salePrice", purpose.supportsSale());
-        this.dailyRentalRate = validatePrice(dailyRentalRate, "dailyRentalRate", purpose.supportsRental());
-        if (mileage < 0) {
-            throw new IllegalArgumentException("mileage must not be negative");
+        if (modelId <= 0) {
+            throw new IllegalArgumentException("modelId must be positive");
         }
-        this.mileage = mileage;
-        this.status = Objects.requireNonNull(status, "status");
-        this.clock = Objects.requireNonNull(clock, "clock");
+        if (vin == null || vin.isBlank() || vin.length() > 17) {
+            throw new IllegalArgumentException("VIN must be non-empty and at most 17 characters");
+        }
+        this.modelId = modelId;
+        this.vin = vin.trim().toUpperCase(Locale.ROOT);
+        this.licencePlate = normalizePlate(licencePlate);
+        if (kilometers < 0) {
+            throw new IllegalArgumentException("kilometers cannot be negative");
+        }
+        if (this.licencePlate == null && kilometers != 0) {
+            throw new DomainRuleViolationException("Se un veicolo non ha targa, obbligatoriamente i chilometri devono essere a 0.");
+        }
+        this.kilometers = kilometers;
+        this.price = Objects.requireNonNull(price, "price");
+        if (this.price.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("price cannot be negative");
+        }
+        int currentYear = LocalDate.now().getYear();
+        if (year < 1900 || year > currentYear) {
+            throw new IllegalArgumentException("Anno del veicolo non valido (" + year + "): deve essere compreso tra 1900 e " + currentYear);
+        }
+        this.year = year;
+        this.state = Objects.requireNonNull(state, "state");
     }
 
-    public static Vehicle create(String plate, VehicleModel model, VehiclePurpose purpose,
-                                 BigDecimal salePrice, BigDecimal dailyRentalRate, long mileage) {
-        return new Vehicle(null, plate, model, purpose, salePrice, dailyRentalRate, mileage,
-                VehicleStatus.AVAILABLE);
+    public static Vehicle create(long modelId, String vin, String licencePlate,
+                                 int kilometers, BigDecimal price, int year, VehicleState state) {
+        return new Vehicle(null, modelId, vin, licencePlate, kilometers, price, year, state);
+    }
+
+    public long modelId() {
+        return modelId;
+    }
+
+    public String vin() {
+        return vin;
+    }
+
+    public String licencePlate() {
+        return licencePlate;
     }
 
     public String plate() {
-        return plate;
+        return licencePlate;
     }
 
-    public VehicleModel model() {
-        return model;
-    }
-
-    public VehiclePurpose purpose() {
-        return purpose;
-    }
-
-    public BigDecimal salePrice() {
-        return salePrice;
-    }
-
-    public BigDecimal dailyRentalRate() {
-        return dailyRentalRate;
+    public int kilometers() {
+        return kilometers;
     }
 
     public long mileage() {
-        return mileage;
+        return kilometers;
     }
 
-    public void updateSalePrice(it.unifi.ing.drivehub.domain.users.User manager, BigDecimal newPrice) {
-        Objects.requireNonNull(manager, "manager")
-                .requireRole(it.unifi.ing.drivehub.domain.users.Role.MANAGER);
-        requirePurpose(purpose.supportsSale(), "vehicle is not offered for sale");
-        salePrice = validatePrice(newPrice, "salePrice", true);
+    public BigDecimal price() {
+        return price;
     }
 
-    public void updateDailyRentalRate(it.unifi.ing.drivehub.domain.users.User manager, BigDecimal newRate) {
-        Objects.requireNonNull(manager, "manager")
-                .requireRole(it.unifi.ing.drivehub.domain.users.Role.MANAGER);
-        requirePurpose(purpose.supportsRental(), "vehicle is not offered for rental");
-        dailyRentalRate = validatePrice(newRate, "dailyRentalRate", true);
+    public int year() {
+        return year;
     }
 
-    public VehicleStatus status() {
-        return status;
+    public VehicleState state() {
+        return state;
     }
 
-    public boolean isAvailableForSale() {
-        return purpose.supportsSale() && status == VehicleStatus.AVAILABLE;
-    }
-
-    public boolean isAvailableForRental() {
-        return purpose.supportsRental() && status == VehicleStatus.AVAILABLE;
-    }
-
-    public void reserveForSale() {
-        requirePurpose(purpose.supportsSale(), "vehicle is not offered for sale");
-        transition(VehicleStatus.AVAILABLE, VehicleStatus.RESERVED);
-    }
-
-    public void releaseSaleReservation() {
-        transition(VehicleStatus.RESERVED, VehicleStatus.AVAILABLE);
-    }
-
-    public void markSold() {
-        transition(VehicleStatus.RESERVED, VehicleStatus.SOLD);
-    }
-
-    public void startRental() {
-        requirePurpose(purpose.supportsRental(), "vehicle is not offered for rental");
-        transition(VehicleStatus.AVAILABLE, VehicleStatus.RENTED);
-    }
-
-    public void finishRental() {
-        transition(VehicleStatus.RENTED, VehicleStatus.AVAILABLE);
-    }
-
-    public void startTestDrive() {
-        transition(VehicleStatus.AVAILABLE, VehicleStatus.TEST_DRIVE);
-    }
-
-    public void finishTestDrive() {
-        transition(VehicleStatus.TEST_DRIVE, VehicleStatus.AVAILABLE);
-    }
-
-    public void sendToMaintenance() {
-        transition(VehicleStatus.AVAILABLE, VehicleStatus.MAINTENANCE);
-    }
-
-    public void returnFromMaintenance() {
-        transition(VehicleStatus.MAINTENANCE, VehicleStatus.AVAILABLE);
-    }
-
-    @Override
-    public void subscribe(InventoryObserver observer) {
-        observers.add(Objects.requireNonNull(observer, "observer"));
-    }
-
-    @Override
-    public void unsubscribe(InventoryObserver observer) {
-        observers.remove(observer);
-    }
-
-    private void transition(VehicleStatus expected, VehicleStatus next) {
-        if (status != expected) {
-            throw new DomainRuleViolationException(
-                    "vehicle transition requires " + expected + " but was " + status);
+    public void updatePrice(BigDecimal newPrice) {
+        if (newPrice == null || newPrice.compareTo(BigDecimal.ZERO) < 0) {
+            throw new DomainRuleViolationException("Price cannot be negative");
         }
-        VehicleStatus previous = status;
-        status = next;
-        InventoryEvent event = new InventoryEvent(InventoryEventType.STATUS_CHANGED, id(), plate,
-                previous, next, Instant.now(clock));
-        observers.forEach(observer -> observer.onInventoryEvent(event));
+        this.price = newPrice;
     }
 
-    private static void requirePurpose(boolean condition, String message) {
-        if (!condition) {
-            throw new DomainRuleViolationException(message);
-        }
+    public void transitionTo(VehicleState newState) {
+        this.state = Objects.requireNonNull(newState, "newState");
     }
 
-    public static String normalizePlate(String plate) {
-        if (plate == null) {
-            throw new IllegalArgumentException("plate must not be null");
+    public void updateDetails(String newPlate, int newKm, BigDecimal newPrice, int newYear, VehicleState newState) {
+        String normalized = normalizePlate(newPlate);
+        if (newKm < 0) {
+            throw new IllegalArgumentException("kilometers cannot be negative");
         }
-        String normalized = plate.replaceAll("[ -]", "").toUpperCase(Locale.ROOT);
-        if (!PLATE.matcher(normalized).matches()) {
-            throw new IllegalArgumentException("plate must contain 5 to 10 alphanumeric characters");
+        if (normalized == null && newKm != 0) {
+            throw new DomainRuleViolationException("Se un veicolo non ha targa, obbligatoriamente i chilometri devono essere a 0.");
+        }
+        int currentYear = LocalDate.now().getYear();
+        if (newYear < 1900 || newYear > currentYear) {
+            throw new IllegalArgumentException("Anno del veicolo non valido (" + newYear + "): deve essere compreso tra 1900 e " + currentYear);
+        }
+        if (newPrice == null || newPrice.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("price cannot be negative");
+        }
+        this.licencePlate = normalized;
+        this.kilometers = newKm;
+        this.price = newPrice;
+        this.year = newYear;
+        this.state = Objects.requireNonNull(newState, "newState");
+    }
+
+    public void approve() {
+        if (state != VehicleState.WAITING) {
+            throw new DomainRuleViolationException("Cannot approve vehicle not in WAITING state");
+        }
+        this.state = VehicleState.SALE;
+    }
+
+    public void block() {
+        if (state != VehicleState.SALE) {
+            throw new DomainRuleViolationException("Cannot block vehicle not in SALE state");
+        }
+        this.state = VehicleState.BLOCKED;
+    }
+
+    public void unblock() {
+        if (state != VehicleState.BLOCKED) {
+            throw new DomainRuleViolationException("Cannot unblock vehicle not in BLOCKED state");
+        }
+        this.state = VehicleState.SALE;
+    }
+
+    private static String normalizePlate(String plate) {
+        if (plate == null || plate.isBlank()) {
+            return null;
+        }
+        String normalized = plate.trim().toUpperCase(Locale.ROOT);
+        if (!PLATE_PATTERN.matcher(normalized).matches()) {
+            throw new IllegalArgumentException("invalid licence plate format: " + plate);
         }
         return normalized;
     }
 
-    private static BigDecimal validatePrice(BigDecimal value, String field, boolean required) {
-        if (!required) {
-            if (value != null) {
-                throw new IllegalArgumentException(field + " is not applicable to this vehicle purpose");
-            }
-            return null;
-        }
-        Objects.requireNonNull(value, field);
-        if (value.signum() < 0 || (required && value.signum() == 0)) {
-            throw new IllegalArgumentException(field + " must be positive");
-        }
-        return value;
+    @Override
+    public String toString() {
+        return "Vehicle{" +
+                "id=" + id() +
+                ", modelId=" + modelId +
+                ", vin='" + vin + '\'' +
+                ", licencePlate='" + licencePlate + '\'' +
+                ", kilometers=" + kilometers +
+                ", price=" + price +
+                ", year=" + year +
+                ", state=" + state +
+                '}';
     }
 }

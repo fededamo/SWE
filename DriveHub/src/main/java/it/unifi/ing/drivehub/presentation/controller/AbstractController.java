@@ -44,6 +44,12 @@ abstract class AbstractController implements ContextAware {
         label.setText(message == null || message.isBlank() ? "Operazione non riuscita" : message);
     }
 
+    protected void showError(Label label, String message) {
+        label.getStyleClass().removeAll("success-text", "danger-text");
+        label.getStyleClass().add("danger-text");
+        label.setText(message == null || message.isBlank() ? "Operazione non riuscita" : message);
+    }
+
     protected BigDecimal decimal(String text, String fieldName) {
         try {
             return new BigDecimal(text.trim().replace(',', '.'));

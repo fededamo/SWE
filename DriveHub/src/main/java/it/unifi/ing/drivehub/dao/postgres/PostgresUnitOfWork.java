@@ -1,12 +1,11 @@
 package it.unifi.ing.drivehub.dao.postgres;
 
+import it.unifi.ing.drivehub.dao.interfaces.BankAccountDao;
 import it.unifi.ing.drivehub.dao.interfaces.BrandDao;
 import it.unifi.ing.drivehub.dao.interfaces.DiscountDao;
-import it.unifi.ing.drivehub.dao.interfaces.PaymentDao;
-import it.unifi.ing.drivehub.dao.interfaces.PurchaseProposalDao;
 import it.unifi.ing.drivehub.dao.interfaces.RentalDao;
-import it.unifi.ing.drivehub.dao.interfaces.SaleOrderDao;
-import it.unifi.ing.drivehub.dao.interfaces.StockOrderDao;
+import it.unifi.ing.drivehub.dao.interfaces.RequestDao;
+import it.unifi.ing.drivehub.dao.interfaces.SaleDao;
 import it.unifi.ing.drivehub.dao.interfaces.TestDriveDao;
 import it.unifi.ing.drivehub.dao.interfaces.UnitOfWork;
 import it.unifi.ing.drivehub.dao.interfaces.UserDao;
@@ -20,16 +19,15 @@ final class PostgresUnitOfWork implements UnitOfWork {
 
     private final Connection connection;
     private final UserDao users;
+    private final BankAccountDao bankAccounts;
     private final BrandDao brands;
     private final VehicleModelDao vehicleModels;
     private final VehicleDao vehicles;
     private final DiscountDao discounts;
     private final RentalDao rentals;
     private final TestDriveDao testDrives;
-    private final SaleOrderDao saleOrders;
-    private final PurchaseProposalDao purchaseProposals;
-    private final PaymentDao payments;
-    private final StockOrderDao stockOrders;
+    private final RequestDao requests;
+    private final SaleDao sales;
     private boolean completed;
     private boolean closed;
 
@@ -37,29 +35,27 @@ final class PostgresUnitOfWork implements UnitOfWork {
         this.connection = connection;
         JdbcEntityLoader loader = new JdbcEntityLoader(connection);
         users = new PostgresUserDao(connection, loader);
+        bankAccounts = new PostgresBankAccountDao(connection, loader);
         brands = new PostgresBrandDao(connection, loader);
         vehicleModels = new PostgresVehicleModelDao(connection, loader);
         vehicles = new PostgresVehicleDao(connection, loader);
         discounts = new PostgresDiscountDao(connection, loader);
         rentals = new PostgresRentalDao(connection, loader);
         testDrives = new PostgresTestDriveDao(connection, loader);
-        saleOrders = new PostgresSaleOrderDao(connection, loader);
-        purchaseProposals = new PostgresPurchaseProposalDao(connection, loader);
-        payments = new PostgresPaymentDao(connection, loader);
-        stockOrders = new PostgresStockOrderDao(connection, loader);
+        requests = new PostgresRequestDao(connection, loader);
+        sales = new PostgresSaleDao(connection, loader);
     }
 
     @Override public UserDao users() { ensureOpen(); return users; }
+    @Override public BankAccountDao bankAccounts() { ensureOpen(); return bankAccounts; }
     @Override public BrandDao brands() { ensureOpen(); return brands; }
     @Override public VehicleModelDao vehicleModels() { ensureOpen(); return vehicleModels; }
     @Override public VehicleDao vehicles() { ensureOpen(); return vehicles; }
     @Override public DiscountDao discounts() { ensureOpen(); return discounts; }
     @Override public RentalDao rentals() { ensureOpen(); return rentals; }
     @Override public TestDriveDao testDrives() { ensureOpen(); return testDrives; }
-    @Override public SaleOrderDao saleOrders() { ensureOpen(); return saleOrders; }
-    @Override public PurchaseProposalDao purchaseProposals() { ensureOpen(); return purchaseProposals; }
-    @Override public PaymentDao payments() { ensureOpen(); return payments; }
-    @Override public StockOrderDao stockOrders() { ensureOpen(); return stockOrders; }
+    @Override public RequestDao requests() { ensureOpen(); return requests; }
+    @Override public SaleDao sales() { ensureOpen(); return sales; }
 
     @Override
     public void commit() {
@@ -100,10 +96,10 @@ final class PostgresUnitOfWork implements UnitOfWork {
         try {
             connection.close();
         } catch (SQLException exception) {
-            if (pending == null) {
-                pending = new DatabaseException("Could not close unit of work", exception);
-            } else {
+            if (pending != null) {
                 pending.addSuppressed(exception);
+            } else {
+                pending = new DatabaseException("Could not close database connection", exception);
             }
         } finally {
             closed = true;
@@ -115,23 +111,22 @@ final class PostgresUnitOfWork implements UnitOfWork {
 
     private void ensureOpen() {
         if (closed) {
-            throw new IllegalStateException("unit of work is closed");
+            throw new IllegalStateException("Unit of work has already been closed");
         }
     }
 
     private void ensureActive() {
         ensureOpen();
         if (completed) {
-            throw new IllegalStateException("unit of work is already completed");
+            throw new IllegalStateException("Unit of work has already been completed");
         }
     }
 
     private void rollbackAfterFailure(SQLException failure) {
         try {
             connection.rollback();
-            completed = true;
-        } catch (SQLException rollbackFailure) {
-            failure.addSuppressed(rollbackFailure);
+        } catch (SQLException rollbackException) {
+            failure.addSuppressed(rollbackException);
         }
     }
 }

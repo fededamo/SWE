@@ -1,91 +1,78 @@
 package it.unifi.ing.drivehub.presentation.core;
 
 import it.unifi.ing.drivehub.domain.users.Role;
-import it.unifi.ing.drivehub.domain.vehicles.VehiclePurpose;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleStatus;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 /**
- * Narrow application boundary used by the JavaFX layer. Implementations delegate
- * to business services; controllers never access JDBC or DAOs directly.
+ * Confine applicativo consumato dai controller JavaFX.
  */
 public interface UiGateway extends AutoCloseable {
     UiModels.Session login(String email, char[] password);
 
-    UiModels.Session register(String fiscalCode, String firstName, String lastName,
-                              String email, String phone, char[] password, Role role);
+    UiModels.Session register(String firstName, String lastName, String email, char[] password, Role role);
 
-    List<UiModels.VehicleItem> searchCatalog(String query, VehiclePurpose purpose, BigDecimal maxPrice);
+    void processExpiredRequests();
 
-    List<UiModels.VehicleItem> inventory(long actorId);
+    // Gestione Profilo e Account
+    void updateEmail(long userId, Role role, char[] currentPassword, String newEmail);
+    void updatePassword(long userId, Role role, char[] currentPassword, char[] newPassword);
+    void deleteAccount(long userId, Role role, char[] currentPassword);
 
-    List<UiModels.TestDriveItem> customerTestDrives(long customerId);
+    // Conto corrente
+    UiModels.BankAccountItem getBankAccount(long clientId);
+    void depositFunds(long clientId, BigDecimal amount);
+    void withdrawFunds(long clientId, BigDecimal amount);
 
-    List<UiModels.TestDriveItem> manageableTestDrives(long salesmanId);
+    // Catalogo e visualizzazione veicoli
+    List<UiModels.VehicleItem> searchCatalog(String query, VehicleState state);
+    List<UiModels.VehicleItem> waitingVehicles();
+    List<UiModels.VehicleItem> allVehicles();
+    BigDecimal quoteValuation(String brand, String model, String plate, int km, int year);
+    BigDecimal quoteRentalPrice(long vehicleId, long days);
 
-    void bookTestDrive(long customerId, long vehicleId, LocalDateTime scheduledAt);
+    // Azioni cliente
+    void submitVehicleForSale(long clientId, UiModels.VehicleSaleSubmission submission);
+    void requestPurchase(long clientId, long vehicleId, BigDecimal deposit);
+    void completePurchase(long clientId, long requestId, long salesmanId);
+    void cancelPurchase(long clientId, long requestId);
+    void bookRental(long clientId, long vehicleId, LocalDate startDate, LocalDate endDate);
+    void bookTestDrive(long clientId, long vehicleId, LocalDate date, LocalTime start);
+    List<UiModels.RequestItem> clientRequests(long clientId);
+    List<UiModels.RentItem> clientRentals(long clientId);
+    List<UiModels.TestDriveItem> clientTestDrives(long clientId);
+    List<UiModels.SaleItem> clientPurchases(long clientId);
 
-    void confirmTestDrive(long salesmanId, long bookingId);
+    // Azioni venditore
+    void approveVehicle(long vehicleId);
+    void rejectVehicle(long vehicleId);
+    void approveClientSale(long requestId, long salesmanId);
+    void rejectClientSale(long requestId, long salesmanId);
+    List<UiModels.RequestItem> allPendingRequests();
+    void unlockFullPayment(long requestId);
+    void authorizePurchase(long requestId, long salesmanId);
+    void switchVehicleState(long vehicleId, VehicleState newState);
+    List<UiModels.RentItem> allRentals();
+    List<UiModels.TestDriveItem> allTestDrives();
 
-    void startTestDrive(long salesmanId, long bookingId);
-
-    void completeTestDrive(long salesmanId, long bookingId);
-
-    void cancelTestDrive(long actorId, Role actorRole, long bookingId);
-
-    BigDecimal quoteRental(long vehicleId, LocalDate startDate, LocalDate endDate);
-
-    void rentAndPay(long customerId, long vehicleId, LocalDate startDate, LocalDate endDate,
-                    String paymentMethod, BigDecimal expectedAmount);
-
-    List<UiModels.RentalItem> customerRentals(long customerId);
-
-    List<UiModels.RentalItem> manageableRentals(long salesmanId);
-
-    void claimRental(long salesmanId, long rentalId);
-
-    void confirmRental(long salesmanId, long rentalId);
-
-    void startRental(long salesmanId, long rentalId);
-
-    void completeRental(long salesmanId, long rentalId);
-
-    void cancelRental(long actorId, Role actorRole, long rentalId);
-
-    BigDecimal quotePurchase(long vehicleId, boolean fullPurchase);
-
-    void reserveOrPurchase(long customerId, long vehicleId, boolean fullPurchase,
-                           String paymentMethod, BigDecimal expectedAmount);
-
-    void submitVehicleSale(long customerId, UiModels.VehicleSaleRequest request);
-
-    List<UiModels.ProposalItem> proposalsForSalesman(long salesmanId);
-
-    void submitPurchaseProposal(long salesmanId, long proposalId, BigDecimal offeredAmount);
-
-    List<UiModels.ProposalItem> proposalsAwaitingManager(long managerId);
-
-    void decidePurchaseProposal(long managerId, long proposalId, boolean approve);
-
-    void updateVehicleStatus(long salesmanId, long vehicleId, VehicleStatus status);
-
-    void updateSalePrice(long managerId, long vehicleId, BigDecimal price);
-
-    void applyDiscount(long managerId, long vehicleId, BigDecimal percentage);
-
-    void removeDiscount(long managerId, long vehicleId);
-
-    void createStockOrder(long managerId, UiModels.StockOrderRequest request);
-
-    List<UiModels.StockOrderItem> stockOrders(long managerId);
-
-    UiModels.Dashboard dashboard(long managerId);
-
-    List<UiModels.ActivityItem> recentActivity(long managerId);
+    // Azioni manager
+    void setModelDiscount(long modelId, int percentage);
+    void setVehicleDiscount(long vehicleId, int percentage);
+    void removeModelDiscount(long modelId);
+    void removeVehicleDiscount(long vehicleId);
+    List<UiModels.SaleItem> allSales();
+    List<UiModels.BrandItem> allBrands();
+    void addBrand(String name);
+    void deleteBrand(String name);
+    List<UiModels.ModelItem> allModels();
+    void addModel(String brand, String name, BigDecimal releasePrice, int releaseYear);
+    void deleteModel(long modelId);
+    void addVehicle(long modelId, String vin, String plate, int km, BigDecimal price, int year, VehicleState state);
+    void deleteVehicle(long vehicleId);
 
     @Override
     default void close() {

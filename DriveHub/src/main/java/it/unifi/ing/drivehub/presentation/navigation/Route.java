@@ -9,7 +9,7 @@ public enum Route {
     WELCOME("Welcome.fxml", EnumSet.noneOf(Role.class)),
     LOGIN("Login.fxml", EnumSet.noneOf(Role.class)),
     REGISTER("Register.fxml", EnumSet.noneOf(Role.class)),
-    CUSTOMER("CustomerWorkspace.fxml", EnumSet.of(Role.CUSTOMER)),
+    CUSTOMER("CustomerWorkspace.fxml", EnumSet.of(Role.CLIENT, Role.CUSTOMER)),
     SALESMAN("SalesmanWorkspace.fxml", EnumSet.of(Role.SALESMAN)),
     MANAGER("ManagerWorkspace.fxml", EnumSet.of(Role.MANAGER));
 

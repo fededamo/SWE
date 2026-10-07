@@ -1,0 +1,12 @@
+{
+    "java.jdt.ls.java.home": "C:\\Users\\irene\\AppData\\Local\\Programs\\jdk-21",
+    "java.configuration.runtimes": [
+        {
+            "name": "JavaSE-21",
+            "path": "C:\\Users\\irene\\AppData\\Local\\Programs\\jdk-21",
+            "default": true
+        }
+    ],
+    "maven.executable.path": "C:\\Users\\irene\\AppData\\Local\\Programs\\apache-maven-3.9.9\\bin\\mvn.cmd",
+    "java.configuration.updateBuildConfiguration": "automatic"
+}

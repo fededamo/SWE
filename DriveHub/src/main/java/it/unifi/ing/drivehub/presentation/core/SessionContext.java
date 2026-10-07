@@ -9,6 +9,10 @@ public final class SessionContext {
         return Optional.ofNullable(current);
     }
 
+    public boolean isLoggedIn() {
+        return current != null;
+    }
+
     public UiModels.Session requireCurrent() {
         if (current == null) {
             throw new IllegalStateException("Nessun utente autenticato");

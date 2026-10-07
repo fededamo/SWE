@@ -1,9 +1,15 @@
 package it.unifi.ing.drivehub.dao.postgres;
 
 import it.unifi.ing.drivehub.dao.interfaces.RentalDao;
-import it.unifi.ing.drivehub.domain.rentals.Rental;
+import it.unifi.ing.drivehub.domain.rentals.Rent;
 
 import java.sql.Connection;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,99 +20,170 @@ final class PostgresRentalDao extends AbstractPostgresDao implements RentalDao {
     }
 
     @Override
-    public Rental save(Rental rental) {
-        if (rental.id() != null) {
-            throw new IllegalArgumentException("rental is already persistent");
+    public Rent save(Rent rent) {
+        if (rent.id() != null) {
+            throw new IllegalArgumentException("rent is already persistent");
         }
-        long id = execute("Could not save rental", () -> JdbcSupport.insert(connection, """
-                INSERT INTO rentals(
-                    customer_id, salesman_id, vehicle_id, starts_on, ends_on, total_price, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, statement -> bindRental(statement, rental, false)));
-        rental.assignId(id);
-        return rental;
+        long id = execute("Could not save rent", () -> JdbcSupport.insert(connection,
+                "INSERT INTO \"rent\" (vehicle, client, amount, start, \"end\") VALUES (?, ?, ?, ?, ?)",
+                stmt -> {
+                    stmt.setLong(1, rent.vehicleId());
+                    stmt.setLong(2, rent.clientId());
+                    stmt.setBigDecimal(3, rent.amount());
+                    stmt.setDate(4, Date.valueOf(rent.start()));
+                    stmt.setDate(5, Date.valueOf(rent.end()));
+                }));
+        rent.assignId(id);
+        return rent;
     }
 
     @Override
-    public void update(Rental rental) {
-        execute("Could not update rental", () -> JdbcSupport.updateExactlyOne(connection, """
-                UPDATE rentals
-                SET customer_id = ?, salesman_id = ?, vehicle_id = ?, starts_on = ?, ends_on = ?,
-                    total_price = ?, status = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """, statement -> bindRental(statement, rental, true)));
+    public Optional<Rent> findById(long id) {
+        return loader.rent(id);
     }
 
     @Override
-    public Optional<Rental> findById(long id) {
-        return loader.rental(id);
+    public List<Rent> findByClientId(long clientId) {
+        return execute("Could not find rents by client", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, vehicle, client, amount, start, \"end\" FROM \"rent\" WHERE client = ? ORDER BY start DESC")) {
+                stmt.setLong(1, clientId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    List<Rent> list = new ArrayList<>();
+                    while (rs.next()) {
+                        list.add(mapRow(rs));
+                    }
+                    return List.copyOf(list);
+                }
+            }
+        });
     }
 
     @Override
-    public Optional<Rental> findByIdForUpdate(long id) {
-        return findOne("SELECT id FROM rentals WHERE id = ? FOR UPDATE",
-                statement -> statement.setLong(1, id), loader::rental,
-                "Could not lock rentals row");
+    public List<Rent> findByVehicleId(long vehicleId) {
+        return execute("Could not find rents by vehicle", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, vehicle, client, amount, start, \"end\" FROM \"rent\" WHERE vehicle = ? ORDER BY start DESC")) {
+                stmt.setLong(1, vehicleId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    List<Rent> list = new ArrayList<>();
+                    while (rs.next()) {
+                        list.add(mapRow(rs));
+                    }
+                    return List.copyOf(list);
+                }
+            }
+        });
     }
 
     @Override
-    public List<Rental> findAll() {
-        return findMany("SELECT id FROM rentals ORDER BY starts_on DESC, id", statement -> { },
-                loader::rental, "Could not list rentals");
+    public List<Rent> findAll() {
+        return execute("Could not find all rents", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, vehicle, client, amount, start, \"end\" FROM \"rent\" ORDER BY start DESC")) {
+                try (ResultSet rs = stmt.executeQuery()) {
+                    List<Rent> list = new ArrayList<>();
+                    while (rs.next()) {
+                        list.add(mapRow(rs));
+                    }
+                    return List.copyOf(list);
+                }
+            }
+        });
     }
 
     @Override
-    public List<Rental> findByCustomer(long customerId) {
-        return findMany("SELECT id FROM rentals WHERE customer_id = ? ORDER BY starts_on DESC, id",
-                statement -> statement.setLong(1, customerId), loader::rental,
-                "Could not list rentals by customer");
+    public boolean hasOverlappingRentals(long vehicleId, LocalDate start, LocalDate end) {
+        return execute("Could not check overlapping rentals", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT 1 FROM \"rent\" WHERE vehicle = ? AND NOT (\"end\" < ? OR start > ?) LIMIT 1")) {
+                stmt.setLong(1, vehicleId);
+                stmt.setDate(2, Date.valueOf(start));
+                stmt.setDate(3, Date.valueOf(end));
+                try (ResultSet rs = stmt.executeQuery()) {
+                    return rs.next();
+                }
+            }
+        });
     }
 
     @Override
-    public List<Rental> findBySalesman(long salesmanId) {
-        return findMany("SELECT id FROM rentals WHERE salesman_id = ? ORDER BY starts_on DESC, id",
-                statement -> statement.setLong(1, salesmanId), loader::rental,
-                "Could not list rentals by salesman");
+    public boolean isVehicleRentedOnDate(long vehicleId, LocalDate date) {
+        return execute("Could not check if vehicle is rented on date", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT 1 FROM \"rent\" WHERE vehicle = ? AND ? BETWEEN start AND \"end\" LIMIT 1")) {
+                stmt.setLong(1, vehicleId);
+                stmt.setDate(2, Date.valueOf(date));
+                try (ResultSet rs = stmt.executeQuery()) {
+                    return rs.next();
+                }
+            }
+        });
     }
 
     @Override
-    public List<Rental> findUnassigned() {
-        return findMany("""
-                SELECT id FROM rentals
-                WHERE salesman_id IS NULL AND status = 'REQUESTED'
-                ORDER BY created_at, id
-                """, statement -> { }, loader::rental, "Could not list unassigned rentals");
+    public List<Rent> findFutureRentalsForVehicle(long vehicleId, LocalDate asOfDate) {
+        return execute("Could not find future rentals for vehicle", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, vehicle, client, amount, start, \"end\" FROM \"rent\" WHERE vehicle = ? AND \"end\" >= ?")) {
+                stmt.setLong(1, vehicleId);
+                stmt.setDate(2, Date.valueOf(asOfDate));
+                try (ResultSet rs = stmt.executeQuery()) {
+                    List<Rent> list = new ArrayList<>();
+                    while (rs.next()) {
+                        list.add(mapRow(rs));
+                    }
+                    return List.copyOf(list);
+                }
+            }
+        });
     }
 
     @Override
-    public boolean claimIfUnassigned(long rentalId, long salesmanId) {
-        return execute("Could not atomically claim rental", () -> JdbcSupport.update(connection, """
-                UPDATE rentals
-                SET salesman_id = ?, status = 'ASSIGNED', updated_at = CURRENT_TIMESTAMP
-                WHERE id = ? AND salesman_id IS NULL AND status = 'REQUESTED'
-                  AND EXISTS (
-                    SELECT 1 FROM users WHERE id = ? AND role = 'SALESMAN' AND active = TRUE
-                  )
-                """, statement -> {
-            statement.setLong(1, salesmanId);
-            statement.setLong(2, rentalId);
-            statement.setLong(3, salesmanId);
-        }) == 1);
+    public void delete(long rentId) {
+        execute("Could not delete rental", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "DELETE FROM \"rent\" WHERE id = ?")) {
+                stmt.setLong(1, rentId);
+                stmt.executeUpdate();
+                return null;
+            }
+        });
     }
 
-    private static void bindRental(
-            java.sql.PreparedStatement statement, Rental rental, boolean includeId)
-            throws java.sql.SQLException {
-        statement.setLong(1, rental.customer().requireId());
-        JdbcSupport.setNullableLong(statement, 2,
-                rental.salesman() == null ? null : rental.salesman().requireId());
-        statement.setLong(3, rental.vehicle().requireId());
-        statement.setObject(4, rental.startsOn());
-        statement.setObject(5, rental.endsOn());
-        statement.setBigDecimal(6, rental.totalPrice());
-        statement.setString(7, rental.status().name());
-        if (includeId) {
-            statement.setLong(8, rental.requireId());
-        }
+    @Override
+    public boolean hasOperationsForVehicle(long vehicleId) {
+        return execute("Could not check rent operations for vehicle", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT 1 FROM \"rent\" WHERE vehicle = ? LIMIT 1")) {
+                stmt.setLong(1, vehicleId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    return rs.next();
+                }
+            }
+        });
+    }
+
+    @Override
+    public boolean hasOperationsForClient(long clientId) {
+        return execute("Could not check rent operations for client", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT 1 FROM \"rent\" WHERE client = ? LIMIT 1")) {
+                stmt.setLong(1, clientId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    return rs.next();
+                }
+            }
+        });
+    }
+
+    private static Rent mapRow(ResultSet rs) throws SQLException {
+        return new Rent(
+                rs.getLong("id"),
+                rs.getLong("vehicle"),
+                rs.getLong("client"),
+                rs.getBigDecimal("amount"),
+                rs.getObject("start", LocalDate.class),
+                rs.getObject("end", LocalDate.class));
     }
 }

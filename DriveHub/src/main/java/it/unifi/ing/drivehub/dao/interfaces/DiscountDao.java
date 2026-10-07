@@ -1,15 +1,15 @@
 package it.unifi.ing.drivehub.dao.interfaces;
 
-import it.unifi.ing.drivehub.domain.sales.Discount;
+import it.unifi.ing.drivehub.domain.vehicles.ModelDiscount;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleDiscount;
 
-import java.time.LocalDate;
-import java.util.List;
 import java.util.Optional;
 
 public interface DiscountDao {
-    Discount save(Discount discount);
-    void update(Discount discount);
-    Optional<Discount> findById(long id);
-    List<Discount> findAll();
-    List<Discount> findActiveOn(LocalDate date);
+    Optional<ModelDiscount> findModelDiscount(long modelId);
+    Optional<VehicleDiscount> findVehicleDiscount(long vehicleId);
+    void saveModelDiscount(ModelDiscount discount);
+    void saveVehicleDiscount(VehicleDiscount discount);
+    void removeModelDiscount(long modelId);
+    void removeVehicleDiscount(long vehicleId);
 }

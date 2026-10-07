@@ -66,7 +66,7 @@ public final class NavigationManager {
     public void showHomeForCurrentRole() {
         UiModels.Session current = context.session().requireCurrent();
         switch (current.role()) {
-            case CUSTOMER -> show(Route.CUSTOMER);
+            case CLIENT, CUSTOMER -> show(Route.CUSTOMER);
             case SALESMAN -> show(Route.SALESMAN);
             case MANAGER -> show(Route.MANAGER);
         }

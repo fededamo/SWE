@@ -7,7 +7,8 @@ import java.util.Optional;
 
 public interface BrandDao {
     Brand save(Brand brand);
-    Optional<Brand> findById(long id);
     Optional<Brand> findByName(String name);
     List<Brand> findAll();
+    void delete(String brandName);
+    boolean hasModels(String brandName);
 }

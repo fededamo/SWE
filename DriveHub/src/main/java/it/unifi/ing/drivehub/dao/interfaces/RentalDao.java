@@ -1,22 +1,21 @@
 package it.unifi.ing.drivehub.dao.interfaces;
 
-import it.unifi.ing.drivehub.domain.rentals.Rental;
+import it.unifi.ing.drivehub.domain.rentals.Rent;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
 public interface RentalDao {
-    Rental save(Rental rental);
-    void update(Rental rental);
-    Optional<Rental> findById(long id);
-
-    /** Locks the row until commit/rollback, then reads its current persisted state. */
-    Optional<Rental> findByIdForUpdate(long id);
-    List<Rental> findAll();
-    List<Rental> findByCustomer(long customerId);
-    List<Rental> findBySalesman(long salesmanId);
-    List<Rental> findUnassigned();
-
-    /** Atomically changes REQUESTED/unassigned to ASSIGNED for exactly one salesman. */
-    boolean claimIfUnassigned(long rentalId, long salesmanId);
+    Rent save(Rent rent);
+    Optional<Rent> findById(long id);
+    List<Rent> findByClientId(long clientId);
+    List<Rent> findByVehicleId(long vehicleId);
+    List<Rent> findAll();
+    boolean hasOverlappingRentals(long vehicleId, LocalDate start, LocalDate end);
+    boolean isVehicleRentedOnDate(long vehicleId, LocalDate date);
+    List<Rent> findFutureRentalsForVehicle(long vehicleId, LocalDate asOfDate);
+    void delete(long rentId);
+    boolean hasOperationsForVehicle(long vehicleId);
+    boolean hasOperationsForClient(long clientId);
 }

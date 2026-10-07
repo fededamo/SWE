@@ -9,10 +9,12 @@ import java.util.Optional;
 public interface UserDao {
     User save(User user);
     void update(User user);
+    void updateEmail(long id, Role role, String newEmail);
+    void updatePassword(long id, Role role, String newPasswordHash);
+    void delete(long id, Role role);
     Optional<User> findById(long id);
-    /** Serializes bookings for the same customer, including different vehicles. */
-    Optional<User> findByIdForUpdate(long id);
     Optional<User> findByEmail(String normalizedEmail);
-    Optional<User> findByFiscalCode(String normalizedFiscalCode);
     List<User> findByRole(Role role);
+    List<User> findAll();
+    boolean hasOperations(long userId, Role role);
 }

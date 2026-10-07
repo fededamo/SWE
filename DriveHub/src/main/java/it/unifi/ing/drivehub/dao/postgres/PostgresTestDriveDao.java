@@ -4,7 +4,12 @@ import it.unifi.ing.drivehub.dao.interfaces.TestDriveDao;
 import it.unifi.ing.drivehub.domain.rentals.TestDrive;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,22 +24,15 @@ final class PostgresTestDriveDao extends AbstractPostgresDao implements TestDriv
         if (testDrive.id() != null) {
             throw new IllegalArgumentException("test drive is already persistent");
         }
-        long id = execute("Could not save test drive", () -> JdbcSupport.insert(connection, """
-                INSERT INTO test_drives(
-                    customer_id, salesman_id, vehicle_id, scheduled_at, ends_at, status
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """, statement -> bindTestDrive(statement, testDrive, false)));
+        long id = execute("Could not save test drive", () -> JdbcSupport.insert(connection,
+                "INSERT INTO \"test_drive\" (vehicle, client, date) VALUES (?, ?, ?)",
+                stmt -> {
+                    stmt.setLong(1, testDrive.vehicleId());
+                    stmt.setLong(2, testDrive.clientId());
+                    stmt.setTimestamp(3, Timestamp.valueOf(testDrive.dateTime()));
+                }));
         testDrive.assignId(id);
         return testDrive;
-    }
-
-    @Override
-    public void update(TestDrive testDrive) {
-        execute("Could not update test drive", () -> JdbcSupport.updateExactlyOne(connection, """
-                UPDATE test_drives
-                SET customer_id = ?, salesman_id = ?, vehicle_id = ?, scheduled_at = ?, ends_at = ?, status = ?
-                WHERE id = ?
-                """, statement -> bindTestDrive(statement, testDrive, true)));
     }
 
     @Override
@@ -43,80 +41,176 @@ final class PostgresTestDriveDao extends AbstractPostgresDao implements TestDriv
     }
 
     @Override
-    public Optional<TestDrive> findByIdForUpdate(long id) {
-        return findOne("SELECT id FROM test_drives WHERE id = ? FOR UPDATE",
-                statement -> statement.setLong(1, id), loader::testDrive,
-                "Could not lock test_drives row");
+    public List<TestDrive> findByClientId(long clientId) {
+        return execute("Could not find test drives by client", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, vehicle, client, date FROM \"test_drive\" WHERE client = ? ORDER BY date DESC")) {
+                stmt.setLong(1, clientId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    List<TestDrive> list = new ArrayList<>();
+                    while (rs.next()) {
+                        list.add(mapRow(rs));
+                    }
+                    return List.copyOf(list);
+                }
+            }
+        });
     }
 
     @Override
-    public List<TestDrive> findByCustomer(long customerId) {
-        return findMany("SELECT id FROM test_drives WHERE customer_id = ? ORDER BY scheduled_at DESC, id",
-                statement -> statement.setLong(1, customerId), loader::testDrive,
-                "Could not list test drives by customer");
+    public List<TestDrive> findByVehicleId(long vehicleId) {
+        return execute("Could not find test drives by vehicle", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, vehicle, client, date FROM \"test_drive\" WHERE vehicle = ? ORDER BY date DESC")) {
+                stmt.setLong(1, vehicleId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    List<TestDrive> list = new ArrayList<>();
+                    while (rs.next()) {
+                        list.add(mapRow(rs));
+                    }
+                    return List.copyOf(list);
+                }
+            }
+        });
     }
 
     @Override
-    public List<TestDrive> findBySalesman(long salesmanId) {
-        return findMany("SELECT id FROM test_drives WHERE salesman_id = ? ORDER BY scheduled_at DESC, id",
-                statement -> statement.setLong(1, salesmanId), loader::testDrive,
-                "Could not list test drives by salesman");
+    public List<TestDrive> findAll() {
+        return execute("Could not find all test drives", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, vehicle, client, date FROM \"test_drive\" ORDER BY date DESC")) {
+                try (ResultSet rs = stmt.executeQuery()) {
+                    List<TestDrive> list = new ArrayList<>();
+                    while (rs.next()) {
+                        list.add(mapRow(rs));
+                    }
+                    return List.copyOf(list);
+                }
+            }
+        });
     }
 
     @Override
-    public List<TestDrive> findUnassigned() {
-        return findMany("""
-                SELECT id FROM test_drives
-                WHERE salesman_id IS NULL AND status = 'REQUESTED'
-                ORDER BY scheduled_at, id
-                """, statement -> { }, loader::testDrive, "Could not list unassigned test drives");
+    public int countActiveByClientId(long clientId, LocalDateTime asOfDate) {
+        return execute("Could not count active test drives for client", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT COUNT(*) FROM \"test_drive\" WHERE client = ? AND date >= ?")) {
+                stmt.setLong(1, clientId);
+                stmt.setTimestamp(2, Timestamp.valueOf(asOfDate));
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getInt(1);
+                    }
+                    return 0;
+                }
+            }
+        });
     }
 
     @Override
-    public boolean existsOverlapping(long vehicleId, LocalDateTime startsAt, LocalDateTime endsAt) {
-        if (!endsAt.isAfter(startsAt)) {
-            throw new IllegalArgumentException("overlap interval must have positive duration");
-        }
-        return execute("Could not check overlapping test drives", () -> JdbcSupport.queryId(connection, """
-                SELECT id FROM test_drives
-                WHERE vehicle_id = ? AND status NOT IN ('CANCELLED', 'COMPLETED')
-                  AND scheduled_at < ? AND ends_at > ?
-                FETCH FIRST 1 ROW ONLY
-                """, statement -> {
-            statement.setObject(1, vehicleId);
-            statement.setObject(2, endsAt);
-            statement.setObject(3, startsAt);
-        }).isPresent());
+    public boolean hasConflictingTestDrive(long vehicleId, LocalDateTime dateTime) {
+        return execute("Could not check conflicting test drive", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT 1 FROM \"test_drive\" WHERE vehicle = ? AND date = ? LIMIT 1")) {
+                stmt.setLong(1, vehicleId);
+                stmt.setTimestamp(2, Timestamp.valueOf(dateTime));
+                try (ResultSet rs = stmt.executeQuery()) {
+                    return rs.next();
+                }
+            }
+        });
     }
 
     @Override
-    public boolean confirmIfUnassigned(long testDriveId, long salesmanId) {
-        return execute("Could not atomically confirm test drive", () -> JdbcSupport.update(connection, """
-                UPDATE test_drives
-                SET salesman_id = ?, status = 'CONFIRMED'
-                WHERE id = ? AND salesman_id IS NULL AND status = 'REQUESTED'
-                  AND EXISTS (
-                    SELECT 1 FROM users WHERE id = ? AND role = 'SALESMAN' AND active = TRUE
-                  )
-                """, statement -> {
-            statement.setLong(1, salesmanId);
-            statement.setLong(2, testDriveId);
-            statement.setLong(3, salesmanId);
-        }) == 1);
+    public List<TestDrive> findFutureTestDrivesForVehicle(long vehicleId, LocalDateTime asOfDate) {
+        return execute("Could not find future test drives", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT id, vehicle, client, date FROM \"test_drive\" WHERE vehicle = ? AND date >= ?")) {
+                stmt.setLong(1, vehicleId);
+                stmt.setTimestamp(2, Timestamp.valueOf(asOfDate));
+                try (ResultSet rs = stmt.executeQuery()) {
+                    List<TestDrive> list = new ArrayList<>();
+                    while (rs.next()) {
+                        list.add(mapRow(rs));
+                    }
+                    return List.copyOf(list);
+                }
+            }
+        });
     }
 
-    private static void bindTestDrive(
-            java.sql.PreparedStatement statement, TestDrive testDrive, boolean includeId)
-            throws java.sql.SQLException {
-        statement.setLong(1, testDrive.customer().requireId());
-        JdbcSupport.setNullableLong(statement, 2,
-                testDrive.salesman() == null ? null : testDrive.salesman().requireId());
-        statement.setLong(3, testDrive.vehicle().requireId());
-        statement.setObject(4, testDrive.scheduledAt());
-        statement.setObject(5, testDrive.endsAt());
-        statement.setString(6, testDrive.status().name());
-        if (includeId) {
-            statement.setLong(7, testDrive.requireId());
-        }
+    @Override
+    public void delete(long testDriveId) {
+        execute("Could not delete test drive", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "DELETE FROM \"test_drive\" WHERE id = ?")) {
+                stmt.setLong(1, testDriveId);
+                stmt.executeUpdate();
+                return null;
+            }
+        });
+    }
+
+    @Override
+    public void cancelFutureTestDrivesForVehicle(long vehicleId, LocalDateTime asOfDate) {
+        execute("Could not cancel future test drives for vehicle", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "DELETE FROM \"test_drive\" WHERE vehicle = ? AND date >= ?")) {
+                stmt.setLong(1, vehicleId);
+                stmt.setTimestamp(2, Timestamp.valueOf(asOfDate));
+                stmt.executeUpdate();
+                return null;
+            }
+        });
+    }
+
+    @Override
+    public void cancelTestDrivesInRange(long vehicleId, LocalDateTime from, LocalDateTime to) {
+        execute("Could not cancel test drives in range for vehicle", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "DELETE FROM \"test_drive\" WHERE vehicle = ? AND date >= ? AND date <= ?")) {
+                stmt.setLong(1, vehicleId);
+                stmt.setTimestamp(2, Timestamp.valueOf(from));
+                stmt.setTimestamp(3, Timestamp.valueOf(to));
+                stmt.executeUpdate();
+                return null;
+            }
+        });
+    }
+
+    @Override
+    public boolean hasOperationsForVehicle(long vehicleId) {
+        return execute("Could not check test drive operations for vehicle", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT 1 FROM \"test_drive\" WHERE vehicle = ? LIMIT 1")) {
+                stmt.setLong(1, vehicleId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    return rs.next();
+                }
+            }
+        });
+    }
+
+    @Override
+    public boolean hasOperationsForClient(long clientId) {
+        return execute("Could not check test drive operations for client", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "SELECT 1 FROM \"test_drive\" WHERE client = ? LIMIT 1")) {
+                stmt.setLong(1, clientId);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    return rs.next();
+                }
+            }
+        });
+    }
+
+    private static TestDrive mapRow(ResultSet rs) throws SQLException {
+        Timestamp ts = rs.getTimestamp("date");
+        LocalDateTime dt = ts != null ? ts.toLocalDateTime() : null;
+        return new TestDrive(
+                rs.getLong("id"),
+                rs.getLong("vehicle"),
+                rs.getLong("client"),
+                dt);
     }
 }

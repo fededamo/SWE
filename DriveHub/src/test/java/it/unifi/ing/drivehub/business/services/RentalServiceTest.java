@@ -1,16 +1,13 @@
 package it.unifi.ing.drivehub.business.services;
 
-import it.unifi.ing.drivehub.business.exceptions.ConflictException;
-import it.unifi.ing.drivehub.business.strategies.PricingStrategy;
+import it.unifi.ing.drivehub.dao.interfaces.BankAccountDao;
 import it.unifi.ing.drivehub.dao.interfaces.DaoFactory;
-import it.unifi.ing.drivehub.dao.interfaces.DiscountDao;
 import it.unifi.ing.drivehub.dao.interfaces.RentalDao;
 import it.unifi.ing.drivehub.dao.interfaces.UnitOfWork;
-import it.unifi.ing.drivehub.dao.interfaces.UserDao;
 import it.unifi.ing.drivehub.dao.interfaces.VehicleDao;
-import it.unifi.ing.drivehub.domain.rentals.Rental;
-import it.unifi.ing.drivehub.domain.rentals.RentalStatus;
-import it.unifi.ing.drivehub.domain.users.User;
+import it.unifi.ing.drivehub.domain.users.BankAccount;
+import it.unifi.ing.drivehub.business.banking.IbanGenerator;
+import it.unifi.ing.drivehub.domain.rentals.Rent;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
 import it.unifi.ing.drivehub.support.TestFixtures;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,75 +16,62 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class RentalServiceTest {
     private UnitOfWork unit;
-    private UserDao users;
     private VehicleDao vehicles;
     private RentalDao rentals;
-    private DiscountDao discounts;
-    private PricingStrategy pricing;
+    private BankAccountDao bankAccounts;
+    private it.unifi.ing.drivehub.dao.interfaces.TestDriveDao testDrives;
     private RentalService service;
 
     @BeforeEach
     void setUp() {
         DaoFactory factory = mock(DaoFactory.class);
         unit = mock(UnitOfWork.class);
-        users = mock(UserDao.class);
         vehicles = mock(VehicleDao.class);
         rentals = mock(RentalDao.class);
-        discounts = mock(DiscountDao.class);
-        pricing = mock(PricingStrategy.class);
+        bankAccounts = mock(BankAccountDao.class);
+        testDrives = mock(it.unifi.ing.drivehub.dao.interfaces.TestDriveDao.class);
         when(factory.begin()).thenReturn(unit);
-        when(unit.users()).thenReturn(users);
         when(unit.vehicles()).thenReturn(vehicles);
         when(unit.rentals()).thenReturn(rentals);
-        when(unit.discounts()).thenReturn(discounts);
-        service = new RentalService(factory, pricing);
+        when(unit.bankAccounts()).thenReturn(bankAccounts);
+        when(unit.testDrives()).thenReturn(testDrives);
+        service = new RentalService(factory);
     }
 
     @Test
-    @DisplayName("UC-C-RENT-SVC: request is priced and persisted with no salesman")
-    void requestRentalIsUnassigned() {
-        User customer = TestFixtures.customer(1L);
-        Vehicle vehicle = TestFixtures.rentalVehicle(30L, "AB123CD");
-        LocalDate start = LocalDate.of(2027, 2, 1);
-        LocalDate end = start.plusDays(3);
-        when(users.findById(1L)).thenReturn(Optional.of(customer));
-        when(vehicles.findByIdForUpdate(30L)).thenReturn(Optional.of(vehicle));
-        when(rentals.findAll()).thenReturn(List.of());
-        when(discounts.findActiveOn(start)).thenReturn(List.of());
-        when(pricing.rentalPrice(eq(vehicle), eq(3L), anyList(), eq(start)))
-                .thenReturn(new BigDecimal("300.00"));
-        when(rentals.save(any())).thenAnswer(invocation -> {
-            Rental rental = invocation.getArgument(0);
-            rental.assignId(50L);
-            return rental;
+    @DisplayName("Book rental debits client bank account and saves Rent")
+    void bookRentalDebitsAccount() {
+        // Veicolo con prezzo 100.000 € -> tariffa giornaliera (0.1%) = 100 €
+        Vehicle vehicle = new Vehicle(30L, 20L, "VIN30", "AB123CD", 22_000, new BigDecimal("100000.00"), 2022, it.unifi.ing.drivehub.domain.vehicles.VehicleState.RENT);
+        when(vehicles.findById(30L)).thenReturn(Optional.of(vehicle));
+
+        String iban = IbanGenerator.generate();
+        BankAccount account = new BankAccount(iban, 1L, new BigDecimal("500.00"));
+        when(bankAccounts.findByClientId(1L)).thenReturn(Optional.of(account));
+
+        when(rentals.save(any())).thenAnswer(inv -> {
+            Rent r = inv.getArgument(0);
+            r.assignId(10L);
+            return r;
         });
 
-        Rental created = service.requestRental(1L, 30L, start, end);
+        LocalDate start = LocalDate.now();
+        LocalDate end = start; // 1 giorno -> costo = 100.00 €
 
-        assertEquals(RentalStatus.REQUESTED, created.status());
-        assertNull(created.salesman());
-        assertEquals(new BigDecimal("300.00"), created.totalPrice());
+        Rent rent = service.bookRental(1L, 30L, start, end);
+
+        assertNotNull(rent);
+        assertEquals(new BigDecimal("400.00"), account.balance());
+        verify(bankAccounts).updateBalance(account.iban(), account.balance());
+        verify(rentals).save(any(Rent.class));
         verify(unit).commit();
-    }
-
-    @Test
-    @DisplayName("UC-S-RENT-RACE: failed atomic claim reports ownership conflict")
-    void failedAtomicClaimRollsBack() {
-        when(users.findById(2L)).thenReturn(Optional.of(TestFixtures.salesman(2L)));
-        when(rentals.claimIfUnassigned(50L, 2L)).thenReturn(false);
-
-        assertThrows(ConflictException.class, () -> service.claimRental(50L, 2L));
-
-        verify(unit).rollback();
-        verify(rentals, never()).update(any());
     }
 }

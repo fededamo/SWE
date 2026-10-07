@@ -1,11 +1,11 @@
 package it.unifi.ing.drivehub.dao.postgres;
 
 import it.unifi.ing.drivehub.dao.interfaces.DiscountDao;
-import it.unifi.ing.drivehub.domain.sales.Discount;
+import it.unifi.ing.drivehub.domain.vehicles.ModelDiscount;
+import it.unifi.ing.drivehub.domain.vehicles.VehicleDiscount;
 
 import java.sql.Connection;
-import java.time.LocalDate;
-import java.util.List;
+import java.sql.PreparedStatement;
 import java.util.Optional;
 
 final class PostgresDiscountDao extends AbstractPostgresDao implements DiscountDao {
@@ -15,61 +15,72 @@ final class PostgresDiscountDao extends AbstractPostgresDao implements DiscountD
     }
 
     @Override
-    public Discount save(Discount discount) {
-        if (discount.id() != null) {
-            throw new IllegalArgumentException("discount is already persistent");
-        }
-        long id = execute("Could not save discount", () -> JdbcSupport.insert(connection, """
-                INSERT INTO discounts(name, vehicle_id, percentage, starts_on, ends_on, enabled)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """, statement -> bindDiscount(statement, discount, false)));
-        discount.assignId(id);
-        return discount;
+    public Optional<ModelDiscount> findModelDiscount(long modelId) {
+        return loader.modelDiscount(modelId);
     }
 
     @Override
-    public void update(Discount discount) {
-        execute("Could not update discount", () -> JdbcSupport.updateExactlyOne(connection, """
-                UPDATE discounts
-                SET name = ?, vehicle_id = ?, percentage = ?, starts_on = ?, ends_on = ?, enabled = ?
-                WHERE id = ?
-                """, statement -> bindDiscount(statement, discount, true)));
+    public Optional<VehicleDiscount> findVehicleDiscount(long vehicleId) {
+        return loader.vehicleDiscount(vehicleId);
     }
 
     @Override
-    public Optional<Discount> findById(long id) {
-        return loader.discount(id);
+    public void saveModelDiscount(ModelDiscount discount) {
+        execute("Could not save model discount", () -> {
+            try (PreparedStatement del = connection.prepareStatement(
+                    "DELETE FROM \"model_discount\" WHERE model = ?")) {
+                del.setLong(1, discount.modelId());
+                del.executeUpdate();
+            }
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "INSERT INTO \"model_discount\" (model, \"value\") VALUES (?, ?)")) {
+                stmt.setLong(1, discount.modelId());
+                stmt.setInt(2, discount.value());
+                stmt.executeUpdate();
+                return null;
+            }
+        });
     }
 
     @Override
-    public List<Discount> findAll() {
-        return findMany("SELECT id FROM discounts ORDER BY starts_on DESC, id", statement -> { },
-                loader::discount, "Could not list discounts");
+    public void saveVehicleDiscount(VehicleDiscount discount) {
+        execute("Could not save vehicle discount", () -> {
+            try (PreparedStatement del = connection.prepareStatement(
+                    "DELETE FROM \"vehicle_discount\" WHERE vehicle = ?")) {
+                del.setLong(1, discount.vehicleId());
+                del.executeUpdate();
+            }
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "INSERT INTO \"vehicle_discount\" (vehicle, \"value\") VALUES (?, ?)")) {
+                stmt.setLong(1, discount.vehicleId());
+                stmt.setInt(2, discount.value());
+                stmt.executeUpdate();
+                return null;
+            }
+        });
     }
 
     @Override
-    public List<Discount> findActiveOn(LocalDate date) {
-        return findMany("""
-                SELECT id FROM discounts
-                WHERE enabled = TRUE AND starts_on <= ? AND ends_on >= ?
-                ORDER BY percentage DESC, id
-                """, statement -> {
-            statement.setObject(1, date);
-            statement.setObject(2, date);
-        }, loader::discount, "Could not list active discounts");
+    public void removeModelDiscount(long modelId) {
+        execute("Could not remove model discount", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "DELETE FROM \"model_discount\" WHERE model = ?")) {
+                stmt.setLong(1, modelId);
+                stmt.executeUpdate();
+                return null;
+            }
+        });
     }
 
-    private static void bindDiscount(
-            java.sql.PreparedStatement statement, Discount discount, boolean includeId)
-            throws java.sql.SQLException {
-        statement.setString(1, discount.name());
-        statement.setLong(2, discount.vehicle().requireId());
-        statement.setBigDecimal(3, discount.percentage());
-        statement.setObject(4, discount.startsOn());
-        statement.setObject(5, discount.endsOn());
-        statement.setBoolean(6, discount.enabled());
-        if (includeId) {
-            statement.setLong(7, discount.requireId());
-        }
+    @Override
+    public void removeVehicleDiscount(long vehicleId) {
+        execute("Could not remove vehicle discount", () -> {
+            try (PreparedStatement stmt = connection.prepareStatement(
+                    "DELETE FROM \"vehicle_discount\" WHERE vehicle = ?")) {
+                stmt.setLong(1, vehicleId);
+                stmt.executeUpdate();
+                return null;
+            }
+        });
     }
 }

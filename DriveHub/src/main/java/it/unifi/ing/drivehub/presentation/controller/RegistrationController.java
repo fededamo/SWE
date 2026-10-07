@@ -11,18 +11,17 @@ import javafx.scene.control.*;
 import java.util.Arrays;
 
 public final class RegistrationController extends AbstractController {
-    @FXML private TextField fiscalCodeField;
     @FXML private TextField firstNameField;
     @FXML private TextField lastNameField;
     @FXML private TextField emailField;
-    @FXML private TextField phoneField;
     @FXML private PasswordField passwordField;
     @FXML private ComboBox<Role> roleCombo;
     @FXML private Label errorLabel;
 
     @FXML
     private void initialize() {
-        roleCombo.setItems(FXCollections.observableArrayList(Role.values()));
+        roleCombo.setItems(FXCollections.observableArrayList(Role.CLIENT, Role.SALESMAN, Role.MANAGER));
+        roleCombo.setValue(Role.CLIENT);
     }
 
     @FXML
@@ -34,8 +33,8 @@ public final class RegistrationController extends AbstractController {
                 throw new IllegalArgumentException("Seleziona un ruolo");
             }
             UiModels.Session registered = gateway().register(
-                    fiscalCodeField.getText(), firstNameField.getText(), lastNameField.getText(),
-                    emailField.getText(), phoneField.getText(), password, role);
+                    firstNameField.getText(), lastNameField.getText(),
+                    emailField.getText(), password, role);
             context.session().open(registered);
             NavigationManager.get().showHomeForCurrentRole();
         } catch (RuntimeException exception) {
