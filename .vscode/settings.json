@@ -8,5 +8,6 @@
         }
     ],
     "maven.executable.path": "C:\\Users\\irene\\AppData\\Local\\Programs\\apache-maven-3.9.9\\bin\\mvn.cmd",
-    "java.configuration.updateBuildConfiguration": "automatic"
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.jdt.ls.vmargs": "-XX:+UseParallelGC -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xmx768m -Xms64m -XX:ErrorFile=${env:TEMP}/hs_err_pid%p.log"
 }

@@ -9,7 +9,6 @@ import it.unifi.ing.drivehub.domain.users.BankAccount;
 import it.unifi.ing.drivehub.business.banking.IbanGenerator;
 import it.unifi.ing.drivehub.domain.rentals.Rent;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
-import it.unifi.ing.drivehub.support.TestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +41,7 @@ class RentalServiceTest {
         when(unit.vehicles()).thenReturn(vehicles);
         when(unit.rentals()).thenReturn(rentals);
         when(unit.bankAccounts()).thenReturn(bankAccounts);
+        when(bankAccounts.findByClientIdForUpdate(anyLong())).thenAnswer(inv -> bankAccounts.findByClientId(inv.getArgument(0)));
         when(unit.testDrives()).thenReturn(testDrives);
         service = new RentalService(factory);
     }

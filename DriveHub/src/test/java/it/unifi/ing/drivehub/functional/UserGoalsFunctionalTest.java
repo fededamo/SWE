@@ -70,7 +70,7 @@ class UserGoalsFunctionalTest extends FunctionalTestSupport {
     void catalogListings() {
         List<UiModels.VehicleItem> items = gateway.searchCatalog("", null);
         assertFalse(items.isEmpty());
-        assertTrue(items.stream().anyMatch(v -> v.plate() != null && v.plate().equals(saleVehicle.plate())));
+        assertTrue(items.stream().anyMatch(v -> v.plate() != null && v.plate().equals(saleVehicle.licencePlate())));
     }
 
     @Test

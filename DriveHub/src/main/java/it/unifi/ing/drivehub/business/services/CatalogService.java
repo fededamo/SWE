@@ -6,8 +6,8 @@ import it.unifi.ing.drivehub.business.exceptions.EntityNotFoundException;
 import it.unifi.ing.drivehub.dao.interfaces.DaoFactory;
 import it.unifi.ing.drivehub.domain.DomainRuleViolationException;
 import it.unifi.ing.drivehub.domain.vehicles.Brand;
+import it.unifi.ing.drivehub.domain.vehicles.Model;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 
 import java.math.BigDecimal;
@@ -42,8 +42,8 @@ public final class CatalogService {
                 .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId)));
     }
 
-    public VehicleModel model(long modelId) {
-        return transactions.execute(unit -> unit.vehicleModels().findById(modelId)
+    public Model model(long modelId) {
+        return transactions.execute(unit -> unit.models().findById(modelId)
                 .orElseThrow(() -> new EntityNotFoundException("model", modelId)));
     }
 
@@ -51,8 +51,8 @@ public final class CatalogService {
         return transactions.execute(unit -> List.copyOf(unit.brands().findAll()));
     }
 
-    public List<VehicleModel> models() {
-        return transactions.execute(unit -> List.copyOf(unit.vehicleModels().findAll()));
+    public List<Model> models() {
+        return transactions.execute(unit -> List.copyOf(unit.models().findAll()));
     }
 
     public Brand addBrand(String name) {
@@ -70,20 +70,20 @@ public final class CatalogService {
         });
     }
 
-    public VehicleModel addModel(String brandName, String name, BigDecimal releasePrice, int releaseYear) {
+    public Model addModel(String brandName, String name, BigDecimal releasePrice, int releaseYear) {
         return transactions.execute(unit -> {
             unit.brands().save(new Brand(brandName.trim()));
-            VehicleModel model = VehicleModel.create(brandName, name, releasePrice, releaseYear);
-            return unit.vehicleModels().save(model);
+            Model model = Model.create(brandName, name, releasePrice, releaseYear);
+            return unit.models().save(model);
         });
     }
 
     public void deleteModel(long modelId) {
         transactions.execute(unit -> {
-            if (unit.vehicleModels().hasVehicles(modelId)) {
+            if (unit.models().hasVehicles(modelId)) {
                 throw new DomainRuleViolationException("Impossibile eliminare il modello #" + modelId + ": esistono veicoli a catalogo associati a questo modello.");
             }
-            unit.vehicleModels().delete(modelId);
+            unit.models().delete(modelId);
             return null;
         });
     }

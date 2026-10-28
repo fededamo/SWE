@@ -3,6 +3,7 @@ package it.unifi.ing.drivehub.dao.postgres;
 import it.unifi.ing.drivehub.dao.interfaces.BankAccountDao;
 import it.unifi.ing.drivehub.dao.interfaces.BrandDao;
 import it.unifi.ing.drivehub.dao.interfaces.DiscountDao;
+import it.unifi.ing.drivehub.dao.interfaces.ModelDao;
 import it.unifi.ing.drivehub.dao.interfaces.RentalDao;
 import it.unifi.ing.drivehub.dao.interfaces.RequestDao;
 import it.unifi.ing.drivehub.dao.interfaces.SaleDao;
@@ -10,7 +11,6 @@ import it.unifi.ing.drivehub.dao.interfaces.TestDriveDao;
 import it.unifi.ing.drivehub.dao.interfaces.UnitOfWork;
 import it.unifi.ing.drivehub.dao.interfaces.UserDao;
 import it.unifi.ing.drivehub.dao.interfaces.VehicleDao;
-import it.unifi.ing.drivehub.dao.interfaces.VehicleModelDao;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -21,7 +21,7 @@ final class PostgresUnitOfWork implements UnitOfWork {
     private final UserDao users;
     private final BankAccountDao bankAccounts;
     private final BrandDao brands;
-    private final VehicleModelDao vehicleModels;
+    private final ModelDao models;
     private final VehicleDao vehicles;
     private final DiscountDao discounts;
     private final RentalDao rentals;
@@ -37,7 +37,7 @@ final class PostgresUnitOfWork implements UnitOfWork {
         users = new PostgresUserDao(connection, loader);
         bankAccounts = new PostgresBankAccountDao(connection, loader);
         brands = new PostgresBrandDao(connection, loader);
-        vehicleModels = new PostgresVehicleModelDao(connection, loader);
+        models = new PostgresModelDao(connection, loader);
         vehicles = new PostgresVehicleDao(connection, loader);
         discounts = new PostgresDiscountDao(connection, loader);
         rentals = new PostgresRentalDao(connection, loader);
@@ -49,7 +49,7 @@ final class PostgresUnitOfWork implements UnitOfWork {
     @Override public UserDao users() { ensureOpen(); return users; }
     @Override public BankAccountDao bankAccounts() { ensureOpen(); return bankAccounts; }
     @Override public BrandDao brands() { ensureOpen(); return brands; }
-    @Override public VehicleModelDao vehicleModels() { ensureOpen(); return vehicleModels; }
+    @Override public ModelDao models() { ensureOpen(); return models; }
     @Override public VehicleDao vehicles() { ensureOpen(); return vehicles; }
     @Override public DiscountDao discounts() { ensureOpen(); return discounts; }
     @Override public RentalDao rentals() { ensureOpen(); return rentals; }

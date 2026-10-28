@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test;
 
 import it.unifi.ing.drivehub.domain.observer.InventoryEvent;
 import it.unifi.ing.drivehub.domain.observer.InventoryEventType;
-import it.unifi.ing.drivehub.domain.observer.InventoryObserver;
 import it.unifi.ing.drivehub.domain.rentals.Rent;
 import it.unifi.ing.drivehub.domain.sales.Request;
 import it.unifi.ing.drivehub.domain.users.BankAccount;
@@ -60,6 +59,7 @@ class TransactionAndObserverTest {
         when(unit.vehicles()).thenReturn(vehicles);
         when(unit.rentals()).thenReturn(rentals);
         when(unit.bankAccounts()).thenReturn(bankAccounts);
+        when(bankAccounts.findByClientIdForUpdate(anyLong())).thenAnswer(inv -> bankAccounts.findByClientId(inv.getArgument(0)));
         when(unit.testDrives()).thenReturn(testDrives);
 
         Vehicle vehicle = new Vehicle(10L, 1L, "VIN10", "AB123CD", 10000, new BigDecimal("20000.00"), 2022, VehicleState.RENT);
@@ -102,6 +102,7 @@ class TransactionAndObserverTest {
         when(unit.requests()).thenReturn(requests);
         when(unit.sales()).thenReturn(sales);
         when(unit.bankAccounts()).thenReturn(bankAccounts);
+        when(bankAccounts.findByClientIdForUpdate(anyLong())).thenAnswer(inv -> bankAccounts.findByClientId(inv.getArgument(0)));
         when(unit.testDrives()).thenReturn(testDrives);
 
         Vehicle vehicle = new Vehicle(20L, 2L, "VIN20", "CD456EF", 5000, new BigDecimal("30000.00"), 2023, VehicleState.SALE);

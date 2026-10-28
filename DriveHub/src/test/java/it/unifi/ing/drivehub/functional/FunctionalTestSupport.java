@@ -34,7 +34,7 @@ abstract class FunctionalTestSupport {
     protected User salesman;
     protected User manager;
     protected Brand brand;
-    protected VehicleModel model;
+    protected Model model;
     protected Vehicle saleVehicle;
     protected Vehicle rentalVehicle;
     protected Vehicle waitingVehicle;
@@ -67,7 +67,7 @@ abstract class FunctionalTestSupport {
 
         // Pre-popola brand e model
         brand = transactions.execute(u -> u.brands().save(new Brand("Alfa Romeo")));
-        model = transactions.execute(u -> u.vehicleModels().save(new VehicleModel(null, "Alfa Romeo", "Giulia", new BigDecimal("40000.00"), 2023)));
+        model = transactions.execute(u -> u.models().save(new Model(null, "Alfa Romeo", "Giulia", new BigDecimal("40000.00"), 2023)));
 
         saleVehicle = transactions.execute(u -> u.vehicles().save(new Vehicle(null, model.requireId(),
                 "VIN-SALE-1", "AA100AA", 15000, new BigDecimal("40000.00"), 2023, VehicleState.SALE)));

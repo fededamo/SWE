@@ -1,6 +1,5 @@
 package it.unifi.ing.drivehub.domain.vehicles;
 
-import it.unifi.ing.drivehub.domain.BaseEntity;
 import it.unifi.ing.drivehub.domain.DomainRuleViolationException;
 
 import java.math.BigDecimal;
@@ -9,9 +8,10 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-public final class Vehicle extends BaseEntity {
+public final class Vehicle {
     private static final Pattern PLATE_PATTERN = Pattern.compile("^[A-Z0-9]{5,10}$");
 
+    private Long id;
     private final long modelId;
     private final String vin;
     private String licencePlate;
@@ -22,13 +22,16 @@ public final class Vehicle extends BaseEntity {
 
     public Vehicle(Long id, long modelId, String vin, String licencePlate,
                    int kilometers, BigDecimal price, int year, VehicleState state) {
-        super(id);
+        if (id != null && id <= 0) {
+            throw new IllegalArgumentException("id must be positive");
+        }
         if (modelId <= 0) {
             throw new IllegalArgumentException("modelId must be positive");
         }
         if (vin == null || vin.isBlank() || vin.length() > 17) {
             throw new IllegalArgumentException("VIN must be non-empty and at most 17 characters");
         }
+        this.id = id;
         this.modelId = modelId;
         this.vin = vin.trim().toUpperCase(Locale.ROOT);
         this.licencePlate = normalizePlate(licencePlate);
@@ -56,6 +59,27 @@ public final class Vehicle extends BaseEntity {
         return new Vehicle(null, modelId, vin, licencePlate, kilometers, price, year, state);
     }
 
+    public Long id() {
+        return id;
+    }
+
+    public void assignId(long id) {
+        if (id <= 0) {
+            throw new IllegalArgumentException("id must be positive");
+        }
+        if (this.id != null && this.id != id) {
+            throw new DomainRuleViolationException("entity id is already assigned");
+        }
+        this.id = id;
+    }
+
+    public long requireId() {
+        if (id == null) {
+            throw new DomainRuleViolationException("entity has not been persisted yet");
+        }
+        return id;
+    }
+
     public long modelId() {
         return modelId;
     }
@@ -68,15 +92,7 @@ public final class Vehicle extends BaseEntity {
         return licencePlate;
     }
 
-    public String plate() {
-        return licencePlate;
-    }
-
     public int kilometers() {
-        return kilometers;
-    }
-
-    public long mileage() {
         return kilometers;
     }
 
@@ -100,7 +116,21 @@ public final class Vehicle extends BaseEntity {
     }
 
     public void transitionTo(VehicleState newState) {
-        this.state = Objects.requireNonNull(newState, "newState");
+        Objects.requireNonNull(newState, "newState");
+        if (this.state == newState) {
+            return;
+        }
+        boolean valid = switch (this.state) {
+            case WAITING -> newState == VehicleState.SALE || newState == VehicleState.SOLD;
+            case SALE -> newState == VehicleState.BLOCKED || newState == VehicleState.RENT || newState == VehicleState.SOLD;
+            case BLOCKED -> newState == VehicleState.SALE || newState == VehicleState.SOLD;
+            case RENT -> newState == VehicleState.SALE;
+            case SOLD -> false;
+        };
+        if (!valid) {
+            throw new DomainRuleViolationException("Transizione di stato non valida da " + this.state + " a " + newState);
+        }
+        this.state = newState;
     }
 
     public void updateDetails(String newPlate, int newKm, BigDecimal newPrice, int newYear, VehicleState newState) {
@@ -158,9 +188,21 @@ public final class Vehicle extends BaseEntity {
     }
 
     @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Vehicle other)) return false;
+        return Objects.equals(vin, other.vin);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(vin);
+    }
+
+    @Override
     public String toString() {
         return "Vehicle{" +
-                "id=" + id() +
+                "id=" + id +
                 ", modelId=" + modelId +
                 ", vin='" + vin + '\'' +
                 ", licencePlate='" + licencePlate + '\'' +

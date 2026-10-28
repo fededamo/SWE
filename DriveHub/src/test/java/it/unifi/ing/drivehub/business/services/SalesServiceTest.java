@@ -44,6 +44,7 @@ class SalesServiceTest {
         when(unit.requests()).thenReturn(requests);
         when(unit.sales()).thenReturn(sales);
         when(unit.bankAccounts()).thenReturn(bankAccounts);
+        when(bankAccounts.findByClientIdForUpdate(anyLong())).thenAnswer(inv -> bankAccounts.findByClientId(inv.getArgument(0)));
         when(unit.discounts()).thenReturn(discounts);
 
         pricingService = new PricingService(factory);

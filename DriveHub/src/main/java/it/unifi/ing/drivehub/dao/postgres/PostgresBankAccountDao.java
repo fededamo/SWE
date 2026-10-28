@@ -74,4 +74,23 @@ final class PostgresBankAccountDao extends AbstractPostgresDao implements BankAc
     public Optional<BankAccount> findByClientId(long clientId) {
         return loader.bankAccountByClient(clientId);
     }
+
+    @Override
+    public Optional<BankAccount> findByClientIdForUpdate(long clientId) {
+        return execute("Could not find bank account by client for update", () -> {
+            try (var stmt = connection.prepareStatement(
+                    "SELECT iban, client, balance FROM \"bank_account\" WHERE client = ? FOR UPDATE")) {
+                stmt.setLong(1, clientId);
+                try (var rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return Optional.of(new BankAccount(
+                                rs.getString("iban"),
+                                rs.getLong("client"),
+                                rs.getBigDecimal("balance")));
+                    }
+                    return Optional.empty();
+                }
+            }
+        });
+    }
 }

@@ -11,8 +11,6 @@ import it.unifi.ing.drivehub.domain.DomainRuleViolationException;
 import it.unifi.ing.drivehub.domain.users.BankAccount;
 import it.unifi.ing.drivehub.domain.users.Role;
 import it.unifi.ing.drivehub.domain.users.User;
-
-import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -40,7 +38,7 @@ public final class AuthService {
             // Generazione automatica del conto bancario per i clienti con saldo iniziale 0
             if (saved.role() == Role.CLIENT || saved.role() == Role.CUSTOMER) {
                 String iban = IbanGenerator.generateForClient(saved.requireId());
-                BankAccount account = BankAccount.create(iban, saved.requireId(), BigDecimal.ZERO.setScale(2));
+                BankAccount account = BankAccount.createNew(iban, saved.requireId());
                 unit.bankAccounts().save(account);
             }
             return saved;

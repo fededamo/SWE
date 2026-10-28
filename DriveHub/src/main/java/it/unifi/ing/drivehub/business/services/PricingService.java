@@ -8,7 +8,7 @@ import it.unifi.ing.drivehub.dao.interfaces.DaoFactory;
 import it.unifi.ing.drivehub.domain.vehicles.ModelDiscount;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleDiscount;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
+import it.unifi.ing.drivehub.domain.vehicles.Model;
 
 import java.math.BigDecimal;
 import java.util.Objects;
@@ -31,7 +31,7 @@ public final class PricingService {
         return transactions.execute(unit -> {
             Vehicle vehicle = unit.vehicles().findById(vehicleId)
                     .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
-            VehicleModel model = unit.vehicleModels().findById(vehicle.modelId())
+            Model model = unit.models().findById(vehicle.modelId())
                     .orElseThrow(() -> new EntityNotFoundException("model", vehicle.modelId()));
 
             Optional<ModelDiscount> md = unit.discounts().findModelDiscount(vehicle.modelId());
@@ -73,8 +73,8 @@ public final class PricingService {
 
     public BigDecimal quoteValuation(String brandName, String modelName, String plate, int km, int year) {
         return transactions.execute(unit -> {
-            Optional<VehicleModel> modelOpt = unit.vehicleModels().findByName(modelName);
-            BigDecimal releasePrice = modelOpt.map(VehicleModel::releasePrice).orElse(new BigDecimal("25000.00"));
+            Optional<Model> modelOpt = unit.models().findByName(modelName);
+            BigDecimal releasePrice = modelOpt.map(Model::releasePrice).orElse(new BigDecimal("25000.00"));
             return calculateValuation(releasePrice, plate, km, year);
         });
     }

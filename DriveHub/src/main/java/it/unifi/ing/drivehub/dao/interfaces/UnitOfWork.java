@@ -5,8 +5,8 @@ public interface UnitOfWork extends AutoCloseable {
     UserDao users();
     BankAccountDao bankAccounts();
     BrandDao brands();
-    VehicleModelDao vehicleModels();
-    default VehicleModelDao models() { return vehicleModels(); }
+    ModelDao models();
+    default ModelDao vehicleModels() { return models(); }
     VehicleDao vehicles();
     DiscountDao discounts();
     RentalDao rentals();

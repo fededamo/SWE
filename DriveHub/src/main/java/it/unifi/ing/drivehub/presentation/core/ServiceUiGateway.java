@@ -16,7 +16,7 @@ import it.unifi.ing.drivehub.domain.users.BankAccount;
 import it.unifi.ing.drivehub.domain.users.Role;
 import it.unifi.ing.drivehub.domain.users.User;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
+import it.unifi.ing.drivehub.domain.vehicles.Model;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 
 import java.math.BigDecimal;
@@ -114,7 +114,7 @@ public final class ServiceUiGateway implements UiGateway {
         String q = query == null ? "" : query.trim().toLowerCase();
         List<UiModels.VehicleItem> items = new ArrayList<>();
         for (Vehicle v : list) {
-            VehicleModel m = catalogService.model(v.modelId());
+            Model m = catalogService.model(v.modelId());
             String desc = m.brandName() + " " + m.name();
             if (q.isEmpty() || desc.toLowerCase().contains(q) || v.vin().toLowerCase().contains(q)
                     || (v.licencePlate() != null && v.licencePlate().toLowerCase().contains(q))) {
@@ -134,7 +134,7 @@ public final class ServiceUiGateway implements UiGateway {
         List<Vehicle> list = catalogService.waitingVehicles();
         List<UiModels.VehicleItem> items = new ArrayList<>();
         for (Vehicle v : list) {
-            VehicleModel m = catalogService.model(v.modelId());
+            Model m = catalogService.model(v.modelId());
             String desc = m.brandName() + " " + m.name();
             items.add(new UiModels.VehicleItem(
                     v.requireId(), v.vin(), v.licencePlate(), desc,
@@ -150,7 +150,7 @@ public final class ServiceUiGateway implements UiGateway {
         List<Vehicle> list = catalogService.allVehicles();
         List<UiModels.VehicleItem> items = new ArrayList<>();
         for (Vehicle v : list) {
-            VehicleModel m = catalogService.model(v.modelId());
+            Model m = catalogService.model(v.modelId());
             String desc = m.brandName() + " " + m.name();
             items.add(new UiModels.VehicleItem(
                     v.requireId(), v.vin(), v.licencePlate(), desc,
@@ -211,7 +211,7 @@ public final class ServiceUiGateway implements UiGateway {
         List<UiModels.RequestItem> items = new ArrayList<>();
         for (Request r : requests) {
             Vehicle v = catalogService.vehicle(r.vehicleId());
-            VehicleModel m = catalogService.model(v.modelId());
+            Model m = catalogService.model(v.modelId());
             items.add(new UiModels.RequestItem(
                     r.requireId(), r.vehicleId(), m.brandName() + " " + m.name(),
                     r.clientId(), r.salesmanId(), r.deposit(), r.expDate(),
@@ -227,7 +227,7 @@ public final class ServiceUiGateway implements UiGateway {
         List<UiModels.RentItem> items = new ArrayList<>();
         for (Rent r : list) {
             Vehicle v = catalogService.vehicle(r.vehicleId());
-            VehicleModel m = catalogService.model(v.modelId());
+            Model m = catalogService.model(v.modelId());
             items.add(new UiModels.RentItem(
                     r.requireId(), r.vehicleId(), m.brandName() + " " + m.name(),
                     r.clientId(), r.amount(), r.start(), r.end()
@@ -242,7 +242,7 @@ public final class ServiceUiGateway implements UiGateway {
         List<UiModels.TestDriveItem> items = new ArrayList<>();
         for (TestDrive td : list) {
             Vehicle v = catalogService.vehicle(td.vehicleId());
-            VehicleModel m = catalogService.model(v.modelId());
+            Model m = catalogService.model(v.modelId());
             items.add(new UiModels.TestDriveItem(
                     td.requireId(), td.vehicleId(), m.brandName() + " " + m.name(),
                     td.clientId(), td.date(), td.start()
@@ -260,7 +260,7 @@ public final class ServiceUiGateway implements UiGateway {
             if (s.vehicleId() != null) {
                 try {
                     Vehicle v = catalogService.vehicle(s.vehicleId());
-                    VehicleModel m = catalogService.model(v.modelId());
+                    Model m = catalogService.model(v.modelId());
                     desc = m.brandName() + " " + m.name();
                 } catch (Exception ignored) {
                 }
@@ -301,7 +301,7 @@ public final class ServiceUiGateway implements UiGateway {
         List<UiModels.RequestItem> items = new ArrayList<>();
         for (Request r : list) {
             Vehicle v = catalogService.vehicle(r.vehicleId());
-            VehicleModel m = catalogService.model(v.modelId());
+            Model m = catalogService.model(v.modelId());
             items.add(new UiModels.RequestItem(
                     r.requireId(), r.vehicleId(), m.brandName() + " " + m.name(),
                     r.clientId(), r.salesmanId(), r.deposit(), r.expDate(),
@@ -332,7 +332,7 @@ public final class ServiceUiGateway implements UiGateway {
         List<UiModels.RentItem> items = new ArrayList<>();
         for (Rent r : list) {
             Vehicle v = catalogService.vehicle(r.vehicleId());
-            VehicleModel m = catalogService.model(v.modelId());
+            Model m = catalogService.model(v.modelId());
             items.add(new UiModels.RentItem(
                     r.requireId(), r.vehicleId(), m.brandName() + " " + m.name(),
                     r.clientId(), r.amount(), r.start(), r.end()
@@ -347,7 +347,7 @@ public final class ServiceUiGateway implements UiGateway {
         List<UiModels.TestDriveItem> items = new ArrayList<>();
         for (TestDrive td : list) {
             Vehicle v = catalogService.vehicle(td.vehicleId());
-            VehicleModel m = catalogService.model(v.modelId());
+            Model m = catalogService.model(v.modelId());
             items.add(new UiModels.TestDriveItem(
                     td.requireId(), td.vehicleId(), m.brandName() + " " + m.name(),
                     td.clientId(), td.date(), td.start()
@@ -385,7 +385,7 @@ public final class ServiceUiGateway implements UiGateway {
             if (s.vehicleId() != null) {
                 try {
                     Vehicle v = catalogService.vehicle(s.vehicleId());
-                    VehicleModel m = catalogService.model(v.modelId());
+                    Model m = catalogService.model(v.modelId());
                     desc = m.brandName() + " " + m.name();
                 } catch (Exception ignored) {
                 }

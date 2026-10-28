@@ -4,9 +4,6 @@ import it.unifi.ing.drivehub.domain.users.BankAccount;
 import it.unifi.ing.drivehub.business.banking.IbanGenerator;
 import it.unifi.ing.drivehub.domain.sales.Request;
 import it.unifi.ing.drivehub.domain.sales.Sale;
-import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
-import it.unifi.ing.drivehub.support.TestFixtures;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -41,17 +38,17 @@ class SalesWorkflowTest {
     }
 
     @Test
-    @DisplayName("Sale creation records completed sale or default failure")
+    @DisplayName("Sale creation records completed sale or penalty")
     void saleCreation() {
-        Sale completed = Sale.completed(1L, 2L, 3L, new BigDecimal("36000.00"), LocalDateTime.now());
-        assertFalse(completed.isDefaultFailure());
+        Sale completed = Sale.record(1L, 3L, 2L, new BigDecimal("36000.00"), LocalDateTime.now());
+        assertFalse(completed.isPenalty());
         assertEquals(1L, completed.vehicleId());
         assertEquals(2L, completed.clientId());
         assertEquals(3L, completed.salesmanId());
 
-        Sale failure = Sale.penalty(2L, new BigDecimal("800.00"), LocalDateTime.now());
-        assertTrue(failure.isDefaultFailure());
-        assertNull(failure.vehicleId());
+        Sale failure = Sale.penalty(1L, 2L, new BigDecimal("800.00"), LocalDateTime.now());
+        assertTrue(failure.isPenalty());
+        assertEquals(1L, failure.vehicleId());
         assertNull(failure.salesmanId());
         assertEquals(2L, failure.clientId());
     }

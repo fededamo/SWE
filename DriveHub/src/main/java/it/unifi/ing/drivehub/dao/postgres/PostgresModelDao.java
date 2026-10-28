@@ -1,7 +1,7 @@
 package it.unifi.ing.drivehub.dao.postgres;
 
-import it.unifi.ing.drivehub.dao.interfaces.VehicleModelDao;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
+import it.unifi.ing.drivehub.dao.interfaces.ModelDao;
+import it.unifi.ing.drivehub.domain.vehicles.Model;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -10,14 +10,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-final class PostgresVehicleModelDao extends AbstractPostgresDao implements VehicleModelDao {
+final class PostgresModelDao extends AbstractPostgresDao implements ModelDao {
 
-    PostgresVehicleModelDao(Connection connection, JdbcEntityLoader loader) {
+    PostgresModelDao(Connection connection, JdbcEntityLoader loader) {
         super(connection, loader);
     }
 
     @Override
-    public VehicleModel save(VehicleModel model) {
+    public Model save(Model model) {
         if (model.id() != null) {
             throw new IllegalArgumentException("model is already persistent");
         }
@@ -34,19 +34,19 @@ final class PostgresVehicleModelDao extends AbstractPostgresDao implements Vehic
     }
 
     @Override
-    public Optional<VehicleModel> findById(long id) {
-        return loader.vehicleModel(id);
+    public Optional<Model> findById(long id) {
+        return loader.model(id);
     }
 
     @Override
-    public Optional<VehicleModel> findByName(String name) {
+    public Optional<Model> findByName(String name) {
         return execute("Could not find model by name", () -> {
             try (PreparedStatement stmt = connection.prepareStatement(
                     "SELECT id, brand, name, release_price, release_year FROM \"model\" WHERE LOWER(name) = LOWER(?)")) {
                 stmt.setString(1, name);
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
-                        return Optional.of(new VehicleModel(
+                        return Optional.of(new Model(
                                 rs.getLong("id"),
                                 rs.getString("brand"),
                                 rs.getString("name"),
@@ -60,15 +60,15 @@ final class PostgresVehicleModelDao extends AbstractPostgresDao implements Vehic
     }
 
     @Override
-    public List<VehicleModel> findByBrand(String brandName) {
+    public List<Model> findByBrand(String brandName) {
         return execute("Could not find models by brand", () -> {
             try (PreparedStatement stmt = connection.prepareStatement(
                     "SELECT id, brand, name, release_price, release_year FROM \"model\" WHERE LOWER(brand) = LOWER(?)")) {
                 stmt.setString(1, brandName);
                 try (ResultSet rs = stmt.executeQuery()) {
-                    List<VehicleModel> models = new ArrayList<>();
+                    List<Model> models = new ArrayList<>();
                     while (rs.next()) {
-                        models.add(new VehicleModel(
+                        models.add(new Model(
                                 rs.getLong("id"),
                                 rs.getString("brand"),
                                 rs.getString("name"),
@@ -82,14 +82,14 @@ final class PostgresVehicleModelDao extends AbstractPostgresDao implements Vehic
     }
 
     @Override
-    public List<VehicleModel> findAll() {
+    public List<Model> findAll() {
         return execute("Could not find all models", () -> {
             try (PreparedStatement stmt = connection.prepareStatement(
                     "SELECT id, brand, name, release_price, release_year FROM \"model\"")) {
                 try (ResultSet rs = stmt.executeQuery()) {
-                    List<VehicleModel> models = new ArrayList<>();
+                    List<Model> models = new ArrayList<>();
                     while (rs.next()) {
-                        models.add(new VehicleModel(
+                        models.add(new Model(
                                 rs.getLong("id"),
                                 rs.getString("brand"),
                                 rs.getString("name"),

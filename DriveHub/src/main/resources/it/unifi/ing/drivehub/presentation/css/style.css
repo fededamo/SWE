@@ -113,6 +113,15 @@
     -fx-background-radius: 9;
 }
 
+.table-row-cell {
+    -fx-cell-size: 38px;
+}
+
+.table-cell {
+    -fx-padding: 0 10;
+    -fx-alignment: CENTER_LEFT;
+}
+
 .table-view .column-header-background { -fx-background-color: #f3f6fb; }
 .table-view .column-header { -fx-background-color: transparent; -fx-padding: 10; }
 
@@ -127,3 +136,45 @@
 }
 
 .auth-card { -fx-min-width: 430; -fx-max-width: 500; }
+
+/* ScrollPane & ScrollBars */
+.scroll-pane {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.scroll-pane.edge-to-edge {
+    -fx-border-color: transparent;
+}
+
+.scroll-bar:vertical, .scroll-bar:horizontal {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar:vertical .track, .scroll-bar:horizontal .track {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.scroll-bar:vertical .thumb, .scroll-bar:horizontal .thumb {
+    -fx-background-color: #cbd5e1;
+    -fx-background-radius: 6;
+}
+
+.scroll-bar:vertical .thumb:hover, .scroll-bar:horizontal .thumb:hover {
+    -fx-background-color: #94a3b8;
+}
+
+.scroll-bar .increment-button, .scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.scroll-bar .increment-arrow, .scroll-bar .decrement-arrow {
+    -fx-shape: " ";
+    -fx-padding: 0;
+}

@@ -41,7 +41,7 @@ public final class JdbcTransactionManager {
         }
     }
 
-    public void inTransaction(SqlAction action) {
+    public void runInTransaction(SqlAction action) {
         inTransaction(connection -> {
             action.execute(connection);
             return null;

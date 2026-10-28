@@ -16,6 +16,7 @@ import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import it.unifi.ing.drivehub.domain.observer.InventorySubject;
 import java.util.Objects;
@@ -80,7 +81,8 @@ public final class RentalService implements InventorySubject {
             throw new IllegalArgumentException("La data di inizio noleggio non può essere nel passato");
         }
 
-        return transactions.execute(unit -> {
+        List<InventoryEvent> eventsToFire = new ArrayList<>();
+        Rent result = transactions.execute(unit -> {
             Vehicle vehicle = unit.vehicles().findById(vehicleId)
                     .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
             if (vehicle.state() != VehicleState.RENT) {
@@ -95,8 +97,8 @@ public final class RentalService implements InventorySubject {
             long days = ChronoUnit.DAYS.between(start, end) + 1;
             BigDecimal amount = pricingService.calculateRentalPrice(vehicle, days);
 
-            // Addebito anticipato al 100% sul conto corrente del cliente
-            BankAccount account = unit.bankAccounts().findByClientId(clientId)
+            // Addebito anticipato al 100% sul conto corrente del cliente con lock pessimistico
+            BankAccount account = unit.bankAccounts().findByClientIdForUpdate(clientId)
                     .orElseThrow(() -> new EntityNotFoundException("BankAccount for client", clientId));
             account.withdraw(amount);
             unit.bankAccounts().updateBalance(account.iban(), account.balance());
@@ -107,10 +109,12 @@ public final class RentalService implements InventorySubject {
             // Annulla test drive futuri su questo veicolo compresi nelle date di noleggio (il noleggio ha priorità)
             unit.testDrives().cancelTestDrivesInRange(vehicleId, start.atStartOfDay(), end.atTime(23, 59, 59));
 
-            notifyObservers(InventoryEvent.of(InventoryEventType.TEST_DRIVES_CANCELLED_VEHICLE_UNAVAILABLE, vehicleId, vehicle.licencePlate()));
+            eventsToFire.add(InventoryEvent.of(InventoryEventType.TEST_DRIVES_CANCELLED_VEHICLE_UNAVAILABLE, vehicleId, vehicle.licencePlate()));
 
             return savedRent;
         });
+        eventsToFire.forEach(this::notifyObservers);
+        return result;
     }
 
     /**
@@ -120,6 +124,7 @@ public final class RentalService implements InventorySubject {
      */
     public void switchVehicleState(long vehicleId, VehicleState newState) {
         Objects.requireNonNull(newState, "newState");
+        List<InventoryEvent> eventsToFire = new ArrayList<>();
         transactions.execute(unit -> {
             Vehicle vehicle = unit.vehicles().findById(vehicleId)
                     .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
@@ -127,19 +132,20 @@ public final class RentalService implements InventorySubject {
             if (vehicle.state() == VehicleState.RENT && newState == VehicleState.SALE) {
                 List<Rent> futureRentals = unit.rentals().findFutureRentalsForVehicle(vehicleId, LocalDate.now());
                 for (Rent r : futureRentals) {
-                    BankAccount clientAccount = unit.bankAccounts().findByClientId(r.clientId())
+                    BankAccount clientAccount = unit.bankAccounts().findByClientIdForUpdate(r.clientId())
                             .orElseThrow(() -> new EntityNotFoundException("BankAccount for client", r.clientId()));
                     clientAccount.deposit(r.amount());
                     unit.bankAccounts().updateBalance(clientAccount.iban(), clientAccount.balance());
                     unit.rentals().delete(r.requireId());
                 }
-                notifyObservers(InventoryEvent.of(InventoryEventType.RENTALS_CANCELLED_STATE_CHANGE, vehicleId, vehicle.licencePlate()));
+                eventsToFire.add(InventoryEvent.of(InventoryEventType.RENTALS_CANCELLED_STATE_CHANGE, vehicleId, vehicle.licencePlate()));
             }
 
             unit.vehicles().updateState(vehicleId, newState);
-            notifyObservers(InventoryEvent.statusChanged(vehicleId, vehicle.licencePlate(), vehicle.state(), newState));
+            eventsToFire.add(InventoryEvent.statusChanged(vehicleId, vehicle.licencePlate(), vehicle.state(), newState));
             return null;
         });
+        eventsToFire.forEach(this::notifyObservers);
     }
 
     public List<Rent> findRentalsByClient(long clientId) {

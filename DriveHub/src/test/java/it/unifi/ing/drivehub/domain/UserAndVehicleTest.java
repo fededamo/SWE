@@ -1,6 +1,6 @@
 package it.unifi.ing.drivehub.domain;
 
-import it.unifi.ing.drivehub.domain.users.Role;
+import it.unifi.ing.drivehub.domain.users.Client;
 import it.unifi.ing.drivehub.domain.users.User;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
@@ -16,7 +16,7 @@ class UserAndVehicleTest {
     @Test
     @DisplayName("User creation trims names and normalizes email")
     void userCreationNormalizesFields() {
-        User user = new User(1L, " Maria ", " Rossi ", "MARIA@EXAMPLE.IT", "hash", Role.CLIENT);
+        User user = new Client(1L, " Maria ", " Rossi ", "MARIA@EXAMPLE.IT", "hash");
 
         assertEquals("Maria", user.name());
         assertEquals("Rossi", user.surname());

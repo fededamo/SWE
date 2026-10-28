@@ -32,14 +32,12 @@ public final class DatabaseBootstrap {
     }
 
     public void initialize() {
-        transactions.inTransaction((JdbcTransactionManager.SqlAction) DatabaseBootstrap::createMigrationTable);
+        transactions.runInTransaction(DatabaseBootstrap::createMigrationTable);
         for (String migration : MIGRATIONS) {
-            transactions.inTransaction((JdbcTransactionManager.SqlAction)
-                    connection -> applyIfNeeded(connection, migration));
+            transactions.runInTransaction(connection -> applyIfNeeded(connection, migration));
         }
         if (seedDemoData) {
-            transactions.inTransaction((JdbcTransactionManager.SqlAction)
-                    connection -> SqlScriptRunner.run(connection, DEMO_SEED));
+            transactions.runInTransaction(connection -> SqlScriptRunner.run(connection, DEMO_SEED));
         }
     }
 

@@ -5,7 +5,6 @@ import it.unifi.ing.drivehub.domain.users.BankAccount;
 import it.unifi.ing.drivehub.business.banking.IbanGenerator;
 import it.unifi.ing.drivehub.domain.rentals.Rent;
 import it.unifi.ing.drivehub.domain.rentals.TestDrive;
-import it.unifi.ing.drivehub.domain.sales.Request;
 import it.unifi.ing.drivehub.domain.sales.Sale;
 import it.unifi.ing.drivehub.domain.users.Role;
 import it.unifi.ing.drivehub.domain.users.User;
@@ -31,22 +30,19 @@ class PostgresDaoIntegrationTest extends PostgresDaoIntegrationSupport {
     @Test
     void persistsAndRehydratesUsersCatalogAndBankAccounts() {
         User client;
-        User salesman;
-        User manager;
-        Brand brand;
-        VehicleModel model;
+        Model model;
         Vehicle saleVehicle;
         BankAccount account;
 
         try (var work = daoFactory.begin()) {
-            client = work.users().save(new User(null, "Mario", "Rossi", "mario@example.com", "hash", Role.CLIENT));
-            salesman = work.users().save(new User(null, "Luigi", "Verdi", "luigi@example.com", "hash", Role.SALESMAN));
-            manager = work.users().save(new User(null, "Luca", "Bianchi", "luca@example.com", "hash", Role.MANAGER));
+            client = work.users().save(new it.unifi.ing.drivehub.domain.users.Client(null, "Mario", "Rossi", "mario@example.com", "hash"));
+            work.users().save(new it.unifi.ing.drivehub.domain.users.Salesman(null, "Luigi", "Verdi", "luigi@example.com", "hash"));
+            work.users().save(new it.unifi.ing.drivehub.domain.users.Manager(null, "Luca", "Bianchi", "luca@example.com", "hash"));
 
             account = work.bankAccounts().save(new BankAccount(IbanGenerator.generate(), client.requireId(), new BigDecimal("1000.00")));
 
-            brand = work.brands().save(new Brand("Alfa Romeo"));
-            model = work.vehicleModels().save(new VehicleModel(null, "Alfa Romeo", "Giulia", new BigDecimal("40000.00"), 2023));
+            work.brands().save(new Brand("Alfa Romeo"));
+            model = work.models().save(new Model(null, "Alfa Romeo", "Giulia", new BigDecimal("40000.00"), 2023));
             saleVehicle = work.vehicles().save(new Vehicle(null, model.requireId(), "VIN100", "AA100AA",
                     10000, new BigDecimal("35000.00"), 2023, VehicleState.SALE));
 
@@ -69,7 +65,7 @@ class PostgresDaoIntegrationTest extends PostgresDaoIntegrationSupport {
 
             // Verifica catalogo e sconti
             Vehicle loadedVehicle = work.vehicles().findById(saleVehicle.requireId()).orElseThrow();
-            assertEquals("AA100AA", loadedVehicle.plate());
+            assertEquals("AA100AA", loadedVehicle.licencePlate());
             assertEquals(VehicleState.SALE, loadedVehicle.state());
 
             var vd = work.discounts().findVehicleDiscount(saleVehicle.requireId()).orElseThrow();
@@ -86,10 +82,10 @@ class PostgresDaoIntegrationTest extends PostgresDaoIntegrationSupport {
         long vehicleId;
 
         try (var work = daoFactory.begin()) {
-            User c = work.users().save(new User(null, "Anna", "Neri", "anna@example.com", "hash", Role.CLIENT));
-            User s = work.users().save(new User(null, "Pietro", "Gialli", "pietro@example.com", "hash", Role.SALESMAN));
-            Brand b = work.brands().save(new Brand("Fiat"));
-            VehicleModel m = work.vehicleModels().save(new VehicleModel(null, "Fiat", "500", new BigDecimal("18000.00"), 2022));
+            User c = work.users().save(new it.unifi.ing.drivehub.domain.users.Client(null, "Anna", "Neri", "anna@example.com", "hash"));
+            User s = work.users().save(new it.unifi.ing.drivehub.domain.users.Salesman(null, "Pietro", "Gialli", "pietro@example.com", "hash"));
+            work.brands().save(new Brand("Fiat"));
+            Model m = work.models().save(new Model(null, "Fiat", "500", new BigDecimal("18000.00"), 2022));
             Vehicle v = work.vehicles().save(new Vehicle(null, m.requireId(), "VIN200", "BB200BB",
                     20000, new BigDecimal("80.00"), 2022, VehicleState.RENT));
 
@@ -115,7 +111,7 @@ class PostgresDaoIntegrationTest extends PostgresDaoIntegrationSupport {
             assertEquals(1, work.testDrives().findByClientId(clientId).size());
 
             // Salva una vendita
-            Sale sale = Sale.completed(vehicleId, clientId, salesmanId, new BigDecimal("80.00"), java.time.LocalDateTime.now());
+            Sale sale = Sale.record(vehicleId, salesmanId, clientId, new BigDecimal("80.00"), java.time.LocalDateTime.now());
             work.sales().save(sale);
             work.commit();
         }

@@ -5,13 +5,16 @@ import it.unifi.ing.drivehub.domain.rentals.TestDrive;
 import it.unifi.ing.drivehub.domain.sales.Request;
 import it.unifi.ing.drivehub.domain.sales.Sale;
 import it.unifi.ing.drivehub.domain.users.BankAccount;
+import it.unifi.ing.drivehub.domain.users.Client;
+import it.unifi.ing.drivehub.domain.users.Manager;
 import it.unifi.ing.drivehub.domain.users.Role;
+import it.unifi.ing.drivehub.domain.users.Salesman;
 import it.unifi.ing.drivehub.domain.users.User;
 import it.unifi.ing.drivehub.domain.vehicles.Brand;
 import it.unifi.ing.drivehub.domain.vehicles.ModelDiscount;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleDiscount;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
+import it.unifi.ing.drivehub.domain.vehicles.Model;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 
 import java.sql.Connection;
@@ -33,13 +36,19 @@ final class JdbcEntityLoader {
 
     Optional<User> user(long id) {
         return load("SELECT id, name, surname, email, hash_password, role FROM \"user\" WHERE id = ?", id,
-                row -> new User(
-                        row.getLong("id"),
-                        row.getString("name"),
-                        row.getString("surname"),
-                        row.getString("email"),
-                        row.getString("hash_password"),
-                        Role.fromString(row.getString("role"))));
+                row -> {
+                    long uid = row.getLong("id");
+                    String name = row.getString("name");
+                    String surname = row.getString("surname");
+                    String email = row.getString("email");
+                    String hash = row.getString("hash_password");
+                    Role role = Role.fromString(row.getString("role"));
+                    return switch (role) {
+                        case CLIENT, CUSTOMER -> new Client(uid, name, surname, email, hash);
+                        case SALESMAN -> new Salesman(uid, name, surname, email, hash);
+                        case MANAGER -> new Manager(uid, name, surname, email, hash);
+                    };
+                });
     }
 
     Optional<BankAccount> bankAccount(String iban) {
@@ -83,9 +92,9 @@ final class JdbcEntityLoader {
         }
     }
 
-    Optional<VehicleModel> vehicleModel(long id) {
+    Optional<Model> model(long id) {
         return load("SELECT id, brand, name, release_price, release_year FROM \"model\" WHERE id = ?", id,
-                row -> new VehicleModel(
+                row -> new Model(
                         row.getLong("id"),
                         row.getString("brand"),
                         row.getString("name"),

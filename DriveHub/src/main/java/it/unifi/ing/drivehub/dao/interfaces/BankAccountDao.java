@@ -12,4 +12,7 @@ public interface BankAccountDao {
     Optional<BankAccount> findByIban(String iban);
     Optional<BankAccount> findByIbanForUpdate(String iban);
     Optional<BankAccount> findByClientId(long clientId);
+    default Optional<BankAccount> findByClientIdForUpdate(long clientId) {
+        return findByClientId(clientId);
+    }
 }

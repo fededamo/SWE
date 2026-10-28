@@ -1,24 +1,17 @@
 package it.unifi.ing.drivehub.presentation;
 
-import it.unifi.ing.drivehub.business.exceptions.ConflictException;
 import it.unifi.ing.drivehub.domain.users.Role;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 import it.unifi.ing.drivehub.presentation.core.*;
 import it.unifi.ing.drivehub.presentation.navigation.NavigationManager;
 import it.unifi.ing.drivehub.presentation.navigation.Route;
 import javafx.application.Platform;
-import javafx.fxml.FXMLLoader;
-import javafx.scene.Node;
-import javafx.scene.Parent;
-import javafx.scene.Scene;
-import javafx.scene.control.*;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.junit.jupiter.api.*;
 
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -27,7 +20,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("gui")
 class JavaFxSmokeTest {
-    private static final String VIEWS = "/it/unifi/ing/drivehub/presentation/view/";
     private static final UiModels.VehicleItem RENTAL = new UiModels.VehicleItem(
             11L, "VIN-RENT", "UI111AA", "Veicolo noleggio demo", 5000, new BigDecimal("50.00"), 2022, VehicleState.RENT, null);
     private static final UiModels.VehicleItem SALE = new UiModels.VehicleItem(

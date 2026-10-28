@@ -1,7 +1,10 @@
 package it.unifi.ing.drivehub.dao.postgres;
 
 import it.unifi.ing.drivehub.dao.interfaces.UserDao;
+import it.unifi.ing.drivehub.domain.users.Client;
+import it.unifi.ing.drivehub.domain.users.Manager;
 import it.unifi.ing.drivehub.domain.users.Role;
+import it.unifi.ing.drivehub.domain.users.Salesman;
 import it.unifi.ing.drivehub.domain.users.User;
 
 import java.sql.Connection;
@@ -108,13 +111,7 @@ final class PostgresUserDao extends AbstractPostgresDao implements UserDao {
                 stmt.setString(1, normalizedEmail);
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
-                        return Optional.of(new User(
-                                rs.getLong("id"),
-                                rs.getString("name"),
-                                rs.getString("surname"),
-                                rs.getString("email"),
-                                rs.getString("hash_password"),
-                                Role.fromString(rs.getString("role"))));
+                        return Optional.of(createUser(rs));
                     }
                     return Optional.empty();
                 }
@@ -131,13 +128,7 @@ final class PostgresUserDao extends AbstractPostgresDao implements UserDao {
                 try (ResultSet rs = stmt.executeQuery()) {
                     List<User> users = new ArrayList<>();
                     while (rs.next()) {
-                        users.add(new User(
-                                rs.getLong("id"),
-                                rs.getString("name"),
-                                rs.getString("surname"),
-                                rs.getString("email"),
-                                rs.getString("hash_password"),
-                                Role.fromString(rs.getString("role"))));
+                        users.add(createUser(rs));
                     }
                     return List.copyOf(users);
                 }
@@ -153,18 +144,26 @@ final class PostgresUserDao extends AbstractPostgresDao implements UserDao {
                 try (ResultSet rs = stmt.executeQuery()) {
                     List<User> users = new ArrayList<>();
                     while (rs.next()) {
-                        users.add(new User(
-                                rs.getLong("id"),
-                                rs.getString("name"),
-                                rs.getString("surname"),
-                                rs.getString("email"),
-                                rs.getString("hash_password"),
-                                Role.fromString(rs.getString("role"))));
+                        users.add(createUser(rs));
                     }
                     return List.copyOf(users);
                 }
             }
         });
+    }
+
+    private static User createUser(ResultSet rs) throws SQLException {
+        long id = rs.getLong("id");
+        String name = rs.getString("name");
+        String surname = rs.getString("surname");
+        String email = rs.getString("email");
+        String hash = rs.getString("hash_password");
+        Role role = Role.fromString(rs.getString("role"));
+        return switch (role) {
+            case CLIENT, CUSTOMER -> new Client(id, name, surname, email, hash);
+            case SALESMAN -> new Salesman(id, name, surname, email, hash);
+            case MANAGER -> new Manager(id, name, surname, email, hash);
+        };
     }
 
     @Override

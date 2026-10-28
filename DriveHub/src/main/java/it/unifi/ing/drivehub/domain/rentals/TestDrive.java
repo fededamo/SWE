@@ -1,6 +1,6 @@
 package it.unifi.ing.drivehub.domain.rentals;
 
-import it.unifi.ing.drivehub.domain.BaseEntity;
+import it.unifi.ing.drivehub.domain.DomainRuleViolationException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -11,19 +11,23 @@ import java.util.Objects;
  * Prenotazione di una prova su strada (Test Drive).
  * Durata fissa: 1 ora. Fascia oraria permessa: 9:00 - 16:00 (slot orari a inizio ora).
  */
-public final class TestDrive extends BaseEntity {
+public final class TestDrive {
+    private Long id;
     private final long vehicleId;
     private final long clientId;
     private final LocalDateTime date;
 
     public TestDrive(Long id, long vehicleId, long clientId, LocalDateTime date) {
-        super(id);
+        if (id != null && id <= 0) {
+            throw new IllegalArgumentException("id must be positive");
+        }
         if (vehicleId <= 0) {
             throw new IllegalArgumentException("vehicleId must be positive");
         }
         if (clientId <= 0) {
             throw new IllegalArgumentException("clientId must be positive");
         }
+        this.id = id;
         this.vehicleId = vehicleId;
         this.clientId = clientId;
         this.date = Objects.requireNonNull(date, "date");
@@ -48,6 +52,27 @@ public final class TestDrive extends BaseEntity {
         return create(vehicleId, clientId, date, start);
     }
 
+    public Long id() {
+        return id;
+    }
+
+    public void assignId(long id) {
+        if (id <= 0) {
+            throw new IllegalArgumentException("id must be positive");
+        }
+        if (this.id != null && this.id != id) {
+            throw new DomainRuleViolationException("entity id is already assigned");
+        }
+        this.id = id;
+    }
+
+    public long requireId() {
+        if (id == null) {
+            throw new DomainRuleViolationException("entity has not been persisted yet");
+        }
+        return id;
+    }
+
     public long vehicleId() {
         return vehicleId;
     }
@@ -68,7 +93,27 @@ public final class TestDrive extends BaseEntity {
         return date.toLocalTime();
     }
 
+    /**
+     * Calcola l'orario di conclusione dello slot (durata fissa di 1 ora).
+     * Metodo di comodo utilizzato primariamente per le asserzioni di test.
+     */
     public LocalTime end() {
         return date.toLocalTime().plusHours(1);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof TestDrive other)) return false;
+        if (id != null && other.id != null) {
+            return Objects.equals(id, other.id);
+        }
+        return vehicleId == other.vehicleId && clientId == other.clientId &&
+                Objects.equals(date, other.date);
+    }
+
+    @Override
+    public int hashCode() {
+        return id != null ? Objects.hash(id) : Objects.hash(vehicleId, clientId, date);
     }
 }

@@ -2,10 +2,9 @@ package it.unifi.ing.drivehub.business;
 
 import it.unifi.ing.drivehub.business.security.Pbkdf2PasswordHasher;
 import it.unifi.ing.drivehub.business.strategies.StandardPricingStrategy;
+import it.unifi.ing.drivehub.domain.vehicles.Model;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
-import it.unifi.ing.drivehub.support.TestFixtures;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -20,7 +19,7 @@ class PricingAndSecurityTest {
     @DisplayName("Pricing strategy applies discount cascade to sale price")
     void discountAppliesToSalePrice() {
         int currentYear = Year.now().getValue();
-        VehicleModel model = new VehicleModel(20L, "Alfa Romeo", "Giulia", new BigDecimal("40000.00"), currentYear);
+        Model model = new Model(20L, "Alfa Romeo", "Giulia", new BigDecimal("40000.00"), currentYear);
         // Nuovo veicolo senza targa, 0 km, anno corrente
         Vehicle newCar = Vehicle.create(20L, "VIN123", null, 0, new BigDecimal("40000.00"), currentYear, VehicleState.SALE);
         StandardPricingStrategy strategy = new StandardPricingStrategy();

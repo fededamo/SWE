@@ -32,6 +32,10 @@ public final class BankAccount {
         return new BankAccount(iban, clientId, initialBalance);
     }
 
+    public static BankAccount createNew(String iban, long clientId) {
+        return new BankAccount(iban, clientId, BigDecimal.ZERO.setScale(2));
+    }
+
     public String iban() {
         return iban;
     }

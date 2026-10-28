@@ -23,8 +23,8 @@ class RentalWorkflowTest {
         assertEquals(1L, rent.vehicleId());
         assertEquals(2L, rent.clientId());
         assertEquals(new BigDecimal("150.00"), rent.amount());
-        assertEquals(start, rent.startDate());
-        assertEquals(end, rent.endDate());
+        assertEquals(start, rent.start());
+        assertEquals(end, rent.end());
     }
 
     @Test

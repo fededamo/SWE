@@ -1,19 +1,29 @@
 package it.unifi.ing.drivehub.business.strategies;
 
 import it.unifi.ing.drivehub.domain.DomainRuleViolationException;
+import it.unifi.ing.drivehub.domain.vehicles.Model;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Objects;
 
 public final class StandardPricingStrategy implements PricingStrategy {
+    private final Clock clock;
+
+    public StandardPricingStrategy() {
+        this(Clock.systemDefaultZone());
+    }
+
+    public StandardPricingStrategy(Clock clock) {
+        this.clock = Objects.requireNonNull(clock, "clock");
+    }
 
     @Override
-    public BigDecimal quoteVehiclePrice(Vehicle vehicle, VehicleModel model, int promotionalDiscount) {
+    public BigDecimal quoteVehiclePrice(Vehicle vehicle, Model model, int promotionalDiscount) {
         Objects.requireNonNull(vehicle, "vehicle");
         Objects.requireNonNull(model, "model");
 
@@ -33,7 +43,7 @@ public final class StandardPricingStrategy implements PricingStrategy {
         }
 
         // 3. Sconto sull'anno di produzione: ogni anno perde il 5% rispetto all'anno precedente
-        int currentYear = LocalDate.now().getYear();
+        int currentYear = LocalDate.now(clock).getYear();
         int yearsOld = Math.max(0, currentYear - vehicle.year());
         if (yearsOld > 0) {
             double yearFactor = Math.pow(0.95, yearsOld);
@@ -97,7 +107,7 @@ public final class StandardPricingStrategy implements PricingStrategy {
         // 2. Nessun promo discount manager su veicolo cliente
 
         // 3. Sconto anno produzione
-        int currentYear = LocalDate.now().getYear();
+        int currentYear = LocalDate.now(clock).getYear();
         int yearsOld = Math.max(0, currentYear - vehicleYear);
         if (yearsOld > 0) {
             double yearFactor = Math.pow(0.95, yearsOld);

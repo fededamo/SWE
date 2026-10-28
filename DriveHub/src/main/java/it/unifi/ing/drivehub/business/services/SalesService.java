@@ -12,8 +12,8 @@ import it.unifi.ing.drivehub.domain.observer.InventorySubject;
 import it.unifi.ing.drivehub.domain.sales.Request;
 import it.unifi.ing.drivehub.domain.sales.Sale;
 import it.unifi.ing.drivehub.domain.users.BankAccount;
+import it.unifi.ing.drivehub.domain.vehicles.Model;
 import it.unifi.ing.drivehub.domain.vehicles.Vehicle;
-import it.unifi.ing.drivehub.domain.vehicles.VehicleModel;
 import it.unifi.ing.drivehub.domain.vehicles.VehicleState;
 
 import java.math.BigDecimal;
@@ -73,14 +73,15 @@ public final class SalesService implements InventorySubject {
      */
     public Request requestPurchase(long clientId, long vehicleId, BigDecimal deposit) {
         Objects.requireNonNull(deposit, "deposit");
-        return transactions.execute(unit -> {
+        List<InventoryEvent> eventsToFire = new ArrayList<>();
+        Request result = transactions.execute(unit -> {
             Vehicle vehicle = unit.vehicles().findById(vehicleId)
                     .orElseThrow(() -> new EntityNotFoundException("vehicle", vehicleId));
             if (vehicle.state() != VehicleState.SALE) {
                 throw new DomainRuleViolationException("Il veicolo selezionato non è disponibile per la vendita (stato: " + vehicle.state() + ")");
             }
 
-            BankAccount account = unit.bankAccounts().findByClientId(clientId)
+            BankAccount account = unit.bankAccounts().findByClientIdForUpdate(clientId)
                     .orElseThrow(() -> new EntityNotFoundException("BankAccount for client", clientId));
             account.withdraw(deposit);
             unit.bankAccounts().updateBalance(account.iban(), account.balance());
@@ -90,9 +91,11 @@ public final class SalesService implements InventorySubject {
             Request request = Request.createPurchase(vehicleId, clientId, deposit);
             Request saved = unit.requests().save(request);
 
-            notifyObservers(InventoryEvent.statusChanged(vehicleId, vehicle.licencePlate(), VehicleState.SALE, VehicleState.BLOCKED));
+            eventsToFire.add(InventoryEvent.statusChanged(vehicleId, vehicle.licencePlate(), VehicleState.SALE, VehicleState.BLOCKED));
             return saved;
         });
+        eventsToFire.forEach(this::notifyObservers);
+        return result;
     }
 
     public Request initiatePurchase(long clientId, long vehicleId, BigDecimal deposit) {
@@ -129,7 +132,8 @@ public final class SalesService implements InventorySubject {
      * 5. Annullamento automatico tramite Observer di tutti i test drive futuri per quel veicolo.
      */
     public Sale completePurchase(long requestId, long salesmanId) {
-        return transactions.execute(unit -> {
+        List<InventoryEvent> eventsToFire = new ArrayList<>();
+        Sale result = transactions.execute(unit -> {
             Request request = unit.requests().findById(requestId)
                     .orElseThrow(() -> new EntityNotFoundException("request", requestId));
             Vehicle vehicle = unit.vehicles().findById(request.vehicleId())
@@ -138,7 +142,7 @@ public final class SalesService implements InventorySubject {
             BigDecimal totalAmount = vehicle.price();
             BigDecimal remaining = totalAmount.subtract(request.deposit());
             if (remaining.compareTo(BigDecimal.ZERO) > 0) {
-                BankAccount account = unit.bankAccounts().findByClientId(request.clientId())
+                BankAccount account = unit.bankAccounts().findByClientIdForUpdate(request.clientId())
                         .orElseThrow(() -> new EntityNotFoundException("BankAccount for client", request.clientId()));
                 account.withdraw(remaining);
                 unit.bankAccounts().updateBalance(account.iban(), account.balance());
@@ -155,11 +159,13 @@ public final class SalesService implements InventorySubject {
             // Annulla eventuali test drive futuri prenotati su questo veicolo
             unit.testDrives().cancelFutureTestDrivesForVehicle(vehicle.requireId(), now);
 
-            notifyObservers(InventoryEvent.statusChanged(vehicle.requireId(), vehicle.licencePlate(), VehicleState.BLOCKED, VehicleState.SOLD));
-            notifyObservers(InventoryEvent.of(InventoryEventType.TEST_DRIVES_CANCELLED_VEHICLE_UNAVAILABLE, vehicle.requireId(), vehicle.licencePlate()));
+            eventsToFire.add(InventoryEvent.statusChanged(vehicle.requireId(), vehicle.licencePlate(), VehicleState.BLOCKED, VehicleState.SOLD));
+            eventsToFire.add(InventoryEvent.of(InventoryEventType.TEST_DRIVES_CANCELLED_VEHICLE_UNAVAILABLE, vehicle.requireId(), vehicle.licencePlate()));
 
             return savedSale;
         });
+        eventsToFire.forEach(this::notifyObservers);
+        return result;
     }
 
     /**
@@ -170,7 +176,8 @@ public final class SalesService implements InventorySubject {
      * 4. Tupla in Request eliminata.
      */
     public Sale cancelRequestWithPenalty(long requestId) {
-        return transactions.execute(unit -> {
+        List<InventoryEvent> eventsToFire = new ArrayList<>();
+        Sale result = transactions.execute(unit -> {
             Request request = unit.requests().findById(requestId)
                     .orElseThrow(() -> new EntityNotFoundException("request", requestId));
 
@@ -178,7 +185,7 @@ public final class SalesService implements InventorySubject {
             BigDecimal penalty = deposit.multiply(new BigDecimal("0.20")).setScale(2, RoundingMode.HALF_UP);
             BigDecimal refund = deposit.subtract(penalty);
 
-            BankAccount account = unit.bankAccounts().findByClientId(request.clientId())
+            BankAccount account = unit.bankAccounts().findByClientIdForUpdate(request.clientId())
                     .orElseThrow(() -> new EntityNotFoundException("BankAccount for client", request.clientId()));
             account.deposit(refund);
             unit.bankAccounts().updateBalance(account.iban(), account.balance());
@@ -190,12 +197,14 @@ public final class SalesService implements InventorySubject {
                     ? request.expDate().atStartOfDay()
                     : LocalDateTime.now();
 
-            Sale penaltySale = Sale.penalty(request.clientId(), penalty, penaltyDate);
+            Sale penaltySale = Sale.penalty(null, request.clientId(), penalty, penaltyDate);
             Sale saved = unit.sales().save(penaltySale);
 
-            notifyObservers(InventoryEvent.requestExpired(request.vehicleId(), null));
+            eventsToFire.add(InventoryEvent.requestExpired(request.vehicleId(), null));
             return saved;
         });
+        eventsToFire.forEach(this::notifyObservers);
+        return result;
     }
 
     public Sale cancelPurchase(long requestId) {
@@ -230,8 +239,9 @@ public final class SalesService implements InventorySubject {
     public Vehicle submitVehicleForSale(String brandName, String modelName, int modelYear,
                                         String vin, String plate, int kilometers,
                                         BigDecimal price, int vehicleYear, long clientId) {
-        return transactions.execute(unit -> {
-            VehicleModel model = CatalogModels.findOrCreate(unit, brandName, modelName, price, modelYear);
+        List<InventoryEvent> eventsToFire = new ArrayList<>();
+        Vehicle result = transactions.execute(unit -> {
+            Model model = CatalogModels.findOrCreate(unit, brandName, modelName, price, modelYear);
             BigDecimal estimatedPrice = pricingService.calculateValuation(model.releasePrice(), plate, kilometers, vehicleYear);
 
             Optional<Vehicle> existing = unit.vehicles().findByVin(vin);
@@ -251,9 +261,11 @@ public final class SalesService implements InventorySubject {
             Request request = Request.createSaleProposal(vehicle.requireId(), clientId, estimatedPrice);
             unit.requests().save(request);
 
-            notifyObservers(InventoryEvent.statusChanged(vehicle.requireId(), vehicle.licencePlate(), null, VehicleState.WAITING));
+            eventsToFire.add(InventoryEvent.statusChanged(vehicle.requireId(), vehicle.licencePlate(), null, VehicleState.WAITING));
             return vehicle;
         });
+        eventsToFire.forEach(this::notifyObservers);
+        return result;
     }
 
     public Vehicle submitVehicleForSale(String brandName, String modelName, int modelYear,
@@ -264,8 +276,9 @@ public final class SalesService implements InventorySubject {
 
     public Vehicle proposeVehicleForSale(long clientId, long modelId, String plate, String vin,
                                          BigDecimal price, int year, int kilometers) {
-        return transactions.execute(unit -> {
-            VehicleModel model = unit.vehicleModels().findById(modelId)
+        List<InventoryEvent> eventsToFire = new ArrayList<>();
+        Vehicle result = transactions.execute(unit -> {
+            Model model = unit.models().findById(modelId)
                     .orElseThrow(() -> new EntityNotFoundException("model", modelId));
             BigDecimal estimatedPrice = pricingService.calculateValuation(model.releasePrice(), plate, kilometers, year);
 
@@ -286,9 +299,11 @@ public final class SalesService implements InventorySubject {
             Request request = Request.createSaleProposal(vehicle.requireId(), clientId, estimatedPrice);
             unit.requests().save(request);
 
-            notifyObservers(InventoryEvent.statusChanged(vehicle.requireId(), vehicle.licencePlate(), null, VehicleState.WAITING));
+            eventsToFire.add(InventoryEvent.statusChanged(vehicle.requireId(), vehicle.licencePlate(), null, VehicleState.WAITING));
             return vehicle;
         });
+        eventsToFire.forEach(this::notifyObservers);
+        return result;
     }
 
     /**
@@ -299,7 +314,8 @@ public final class SalesService implements InventorySubject {
      * 4. Il saldo del cliente viene incrementato del valore dell'auto.
      */
     public Sale approveClientSale(long requestId, long salesmanId) {
-        return transactions.execute(unit -> {
+        List<InventoryEvent> eventsToFire = new ArrayList<>();
+        Sale result = transactions.execute(unit -> {
             Request request = unit.requests().findById(requestId)
                     .orElseThrow(() -> new EntityNotFoundException("request", requestId));
             if (!request.isSaleProposal()) {
@@ -311,9 +327,9 @@ public final class SalesService implements InventorySubject {
             // Aggiorna stato veicolo a SALE
             unit.vehicles().updateState(vehicle.requireId(), VehicleState.SALE);
 
-            // Incrementa saldo del cliente del valore dell'auto
+            // Incrementa saldo del cliente del valore dell'auto con lock pessimistico
             BigDecimal payout = request.deposit().abs();
-            BankAccount account = unit.bankAccounts().findByClientId(request.clientId())
+            BankAccount account = unit.bankAccounts().findByClientIdForUpdate(request.clientId())
                     .orElseThrow(() -> new EntityNotFoundException("BankAccount for client", request.clientId()));
             account.deposit(payout);
             unit.bankAccounts().updateBalance(account.iban(), account.balance());
@@ -324,8 +340,22 @@ public final class SalesService implements InventorySubject {
 
             unit.requests().delete(requestId);
 
-            notifyObservers(InventoryEvent.statusChanged(vehicle.requireId(), vehicle.licencePlate(), VehicleState.WAITING, VehicleState.SALE));
+            eventsToFire.add(InventoryEvent.statusChanged(vehicle.requireId(), vehicle.licencePlate(), VehicleState.WAITING, VehicleState.SALE));
             return saved;
+        });
+        eventsToFire.forEach(this::notifyObservers);
+        return result;
+    }
+
+    public void approveVehicle(long vehicleId, long salesmanId) {
+        transactions.execute(unit -> {
+            Optional<Request> reqOpt = unit.requests().findByVehicleId(vehicleId);
+            if (reqOpt.isPresent() && reqOpt.get().isSaleProposal()) {
+                approveClientSale(reqOpt.get().requireId(), salesmanId);
+            } else {
+                unit.vehicles().updateState(vehicleId, VehicleState.SALE);
+            }
+            return null;
         });
     }
 
@@ -333,7 +363,13 @@ public final class SalesService implements InventorySubject {
         transactions.execute(unit -> {
             Optional<Request> reqOpt = unit.requests().findByVehicleId(vehicleId);
             if (reqOpt.isPresent() && reqOpt.get().isSaleProposal()) {
-                approveClientSale(reqOpt.get().requireId(), 1L);
+                Long sid = reqOpt.get().salesmanId();
+                if (sid == null) {
+                    sid = unit.users().findByRole(it.unifi.ing.drivehub.domain.users.Role.SALESMAN).stream()
+                            .map(it.unifi.ing.drivehub.domain.users.User::requireId).findFirst()
+                            .orElseThrow(() -> new IllegalStateException("No salesman available to approve sale"));
+                }
+                approveClientSale(reqOpt.get().requireId(), sid);
             } else {
                 unit.vehicles().updateState(vehicleId, VehicleState.SALE);
             }
